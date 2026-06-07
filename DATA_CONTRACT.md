@@ -17,7 +17,9 @@ These files contain your personal data, customizations, and work product. Update
 | `data/applications.md` | Your application tracker |
 | `data/pipeline.md` | Your URL inbox |
 | `data/scan-history.tsv` | Your scan history |
+| `data/api-usage.tsv` | Generated: monthly aggregator API call counts (gitignored) |
 | `data/follow-ups.md` | Your follow-up history |
+| `.env` | Your API secrets for aggregators (Adzuna/JSearch keys) — gitignored, never committed; `.env.example` is the system-owned template |
 | `writing-samples/*` | Your personal writing samples for style calibration (except `writing-samples/README.md`, which is system-owned documentation delivered by updates) |
 | `reports/*` | Your evaluation reports |
 | `output/*` | Your generated PDFs |
@@ -61,6 +63,7 @@ These files contain system logic, scripts, templates, and instructions that impr
 | `.claude/skills/*` | Skill definitions |
 | `docs/*` | Documentation |
 | `VERSION` | Current version number |
+| `.env.example` | Committed template documenting aggregator API keys (copy to `.env`) |
 | `DATA_CONTRACT.md` | This file |
 | `writing-samples/README.md` | System-owned onboarding documentation for the writing-samples directory |
 
