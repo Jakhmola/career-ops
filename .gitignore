@@ -1,9 +1,15 @@
 # Personal data (user fills these)
 cv.md
+article-digest.md
 data/applications.md
+data/applications.md.bak
 data/pipeline.md
 data/scan-history.tsv
 data/api-usage.tsv
+# Generated scan / prefilter output (personal)
+data/filter-stats.md
+data/pipeline-filtered.md
+data/scan-report-*.md
 data/parser-output/**/*.json
 !data/parser-output/.gitkeep
 !data/parser-output/**/.gitkeep
@@ -13,6 +19,7 @@ output/*
 !output/.gitkeep
 batch/logs/*
 !batch/logs/.gitkeep
+batch/*.log
 batch/batch-state.tsv
 batch/batch-input.tsv
 batch/tracker-additions/**/*.tsv
