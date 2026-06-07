@@ -82,13 +82,22 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.PipelineOpenReportMsg:
 		m.viewer = screens.NewViewerModel(
 			m.theme,
-			msg.Path, msg.Title,
+			msg.Path, msg.Title, msg.App,
 			m.pipeline.Width(), m.pipeline.Height(),
 		)
 		m.state = viewReport
 		return m, nil
 
 	case screens.ViewerClosedMsg:
+		m.state = viewPipeline
+		return m, nil
+
+	case screens.ViewerMarkAppliedMsg:
+		err := data.UpdateApplicationStatus(m.careerOpsPath, msg.App, "Applied")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "WARN: status update failed: %v\n", err)
+		}
+		m.reloadPipelineData()
 		m.state = viewPipeline
 		return m, nil
 

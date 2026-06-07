@@ -40,6 +40,12 @@ func ParseApplications(careerOpsPath string) []model.CareerApplication {
 		}
 	}
 
+	// Report links in the tracker are written relative to the tracker file's own
+	// directory (e.g. "../reports/..." when the tracker is at data/applications.md;
+	// see #760). Every downstream consumer joins ReportPath against careerOpsPath
+	// (the repo root), so normalize links to be root-relative here, at the source.
+	trackerDir := filepath.Dir(filePath)
+
 	lines := strings.Split(string(content), "\n")
 	apps := make([]model.CareerApplication, 0)
 	num := 0
@@ -99,7 +105,7 @@ func ParseApplications(careerOpsPath string) []model.CareerApplication {
 		// Parse report link
 		if rm := reReportLink.FindStringSubmatch(fields[7]); rm != nil {
 			app.ReportNumber = rm[1]
-			app.ReportPath = rm[2]
+			app.ReportPath = normalizeReportPath(careerOpsPath, trackerDir, rm[2])
 		}
 
 		// Notes (field 8 if exists)
@@ -164,6 +170,41 @@ func ParseApplications(careerOpsPath string) []model.CareerApplication {
 	enrichAppURLsByCompany(careerOpsPath, apps)
 
 	return apps
+}
+
+// normalizeReportPath converts a report link taken from the tracker into a path
+// relative to careerOpsPath (the repo root). Tracker links are written relative
+// to the tracker file's own directory (trackerDir), so "../reports/x.md" from
+// data/applications.md must become "reports/x.md" (see #760). To stay robust
+// against legacy/mixed trackers that still hold bare "reports/x.md" links, it
+// prefers whichever resolution points at an existing file: trackerDir-relative
+// first, then root-relative. Idempotent for already-correct links.
+func normalizeReportPath(careerOpsPath, trackerDir, link string) string {
+	if link == "" || strings.Contains(link, "://") || filepath.IsAbs(link) {
+		return link
+	}
+	rootRel := func(base string) (string, bool) {
+		rel, err := filepath.Rel(careerOpsPath, filepath.Join(base, link))
+		if err != nil {
+			return "", false
+		}
+		_, statErr := os.Stat(filepath.Join(careerOpsPath, rel))
+		return rel, statErr == nil
+	}
+	// Preferred: link is relative to the tracker's directory (the #760 contract).
+	if rel, ok := rootRel(trackerDir); ok {
+		return rel
+	}
+	// Fallback: legacy bare link relative to the repo root.
+	if rel, ok := rootRel(careerOpsPath); ok {
+		return rel
+	}
+	// Neither exists on disk — return the trackerDir-relative resolution so the
+	// path is still root-relative (matches what every consumer expects).
+	if rel, err := filepath.Rel(careerOpsPath, filepath.Join(trackerDir, link)); err == nil {
+		return rel
+	}
+	return link
 }
 
 // loadBatchInputURLs reads batch-input.tsv and returns a map of batch ID -> job URL.
