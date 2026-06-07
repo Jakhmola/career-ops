@@ -112,6 +112,9 @@ async function generatePDF() {
   inputPath = resolve(inputPath);
   outputPath = resolve(outputPath);
 
+  // Ensure the output file's parent directory exists (e.g. output/cover-letters/)
+  mkdirSync(dirname(outputPath), { recursive: true });
+
   // Validate format
   const validFormats = ['a4', 'letter'];
   if (!validFormats.includes(format)) {

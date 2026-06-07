@@ -5,13 +5,13 @@
 1. Read `cv.md` as the source of truth
 2. Ask the user for the JD if it is not in context (text or URL)
 3. Extract 15-20 keywords from the JD
-4. Detect JD language → CV language (EN default)
+4. CV language: if `config/profile.yml` has `language.force_english_output: true`, ALWAYS output English (even for a Dutch/other-language JD — extract keywords from it but write the CV in English). Otherwise detect JD language → CV language (EN default).
 5. Detect company location → paper format:
    - US/Canada → `letter`
    - Rest of the world → `a4`
 6. Detect role archetype → adapt framing
 7. Rewrite Professional Summary by injecting JD keywords + exit narrative bridge ("Built and sold a business. Now applying systems thinking to [JD domain].")
-8. Select top 3-4 most relevant projects for the job
+8. Select top 3-4 most relevant projects for the job. Honor any project preference in `modes/_profile.md` (e.g. a preferred flagship project) — include the preferred project whenever it is relevant to the role, and only drop it when genuinely unsuitable.
 9. Reorder experience bullets by JD relevance
 10. Build competency grid from JD requirements (6-8 keyword phrases)
 11. Inject keywords naturally into existing achievements (NEVER invent)
@@ -21,10 +21,21 @@
 15. Execute: `node generate-pdf.mjs /tmp/cv-{candidate}-{company}.html output/cv-{candidate}-{company}-{YYYY-MM-DD}.pdf --format={letter|a4}`
 16. Report: PDF path, number of pages, keyword coverage %
 
+## Project Links
+
+Project titles in the `Projects` section must be `<a>` hyperlinks to the repo/demo URL — `<span class="project-title"><a href="{url}">{Title}</a></span>`. The URL is also repeated as plain text in the `.project-tech` line (no `<a>` tag there) so ATS parsers that strip anchor tags still extract it. Never put the URL only in the tech line with the title as a plain span.
+
 ## ATS Rules (clean parsing)
 
 - Single-column layout (no sidebars, no parallel columns)
-- Standard headers: "Professional Summary", "Work Experience", "Education", "Skills", "Certifications", "Projects"
+- **Standard headers — use these EXACT strings, always. Never embellish or rename them** (no "Selected Projects", "Key Projects", "Relevant Experience", "Professional Experience", etc.). ATS parsers match on canonical section names:
+  - `Professional Summary`
+  - `Core Competencies`
+  - `Work Experience`
+  - `Projects`  ← exactly this, never "Selected Projects"
+  - `Education`
+  - `Certifications`
+  - `Skills`
 - No text in images/SVGs
 - No critical info in PDF headers/footers (ATS ignores them)
 - UTF-8, selectable text (not rasterized)
@@ -77,6 +88,7 @@ Use the template in `cv-template.html`. Replace the `{{...}}` placeholders with 
 | `{{PORTFOLIO_URL}}` | [from profile.yml] (or /es depending on language) |
 | `{{PORTFOLIO_DISPLAY}}` | [from profile.yml] (or /es depending on language) |
 | `{{LOCATION}}` | [from profile.yml] |
+| `{{PERMIT_STATUS}}` | If `profile.yml` has `location.permit_display` set: `<span class="separator">\|</span><span>{value}</span>`. Omit entirely if the key is absent or empty. |
 | `{{SECTION_SUMMARY}}` | Professional Summary |
 | `{{SUMMARY_TEXT}}` | Personalized summary with keywords |
 | `{{SECTION_COMPETENCIES}}` | Core Competencies |
@@ -176,4 +188,6 @@ d. Report: PDF path, file size, Canva design URL (for manual tweaking)
 
 ## Post-generation
 
-Update tracker if the job is already registered: change PDF from ❌ to ✅.
+If the job is already registered:
+1. Update the tracker (`data/applications.md`): change PDF column from ❌ to ✅ and add the output filename.
+2. Update the report file (`reports/{num}-*.md`): change `**PDF:** ❌` to `**PDF:** output/{filename}.pdf ✅`.
