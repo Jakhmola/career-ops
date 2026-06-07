@@ -349,6 +349,32 @@ search_queries:
     query: 'site:linkedin.com/jobs "Software Engineer" OR "Backend Engineer" OR "Frontend Engineer" Turkey OR Türkiye OR Ankara OR Istanbul'
     enabled: false
 
+# -- Aggregators (query-based sources; keys live in .env) --
+# Aggregators return jobs from MANY employers in response to one query, unlike
+# tracked_companies (one employer each). scan.mjs polls them in the same
+# zero-token pass and reuses title_filter.positive + location_filter, merging
+# results into one dedup pass. They are OPTIONAL — Arbeitnow needs no key.
+#
+# Setup:  cp .env.example .env   then fill in the keys you want:
+#   ADZUNA_APP_ID / ADZUNA_APP_KEY  → https://developer.adzuna.com/  (free)
+#   RAPIDAPI_KEY                    → https://app.openwebninja.com/api/jsearch (free ~200/mo; sent as x-api-key)
+# A missing key just keeps that aggregator dormant (no error).
+#
+# aggregators:
+#   arbeitnow:
+#     enabled: true            # no key required (EU/DE-heavy feed)
+#     max_pages: 2
+#   adzuna:
+#     enabled: true            # needs ADZUNA_APP_ID / ADZUNA_APP_KEY in .env
+#     country: nl              # lowercase ISO country code
+#     where: Netherlands       # optional location scope
+#     max_pages: 1
+#     max_days_old: 30
+#   jsearch:
+#     enabled: false           # opt-in: needs RAPIDAPI_KEY; surfaces LinkedIn/Indeed/Glassdoor
+#     country: nl
+#     monthly_cap: 180         # guard the ~200/mo free tier (tracked in data/api-usage.tsv)
+
 # -- Tracked companies --
 # Companies whose career pages are checked directly.
 # scan_method: playwright (default), websearch, local_parser

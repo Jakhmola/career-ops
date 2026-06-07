@@ -27,12 +27,15 @@
  *   node scan.mjs --verify         # Playwright-check each new URL; drop expired postings
  */
 
+import 'dotenv/config'; // loads .env so aggregator providers can read API keys from process.env
+
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
 import { pathToFileURL, fileURLToPath } from 'url';
 import path from 'path';
 import yaml from 'js-yaml';
 
 import { makeHttpCtx } from './providers/_http.mjs';
+import { getMonthlyCount, addUsage } from './usage-ledger.mjs';
 
 const parseYaml = yaml.load;
 
@@ -119,13 +122,25 @@ function resolveProvider(entry, providers, { skipIds = [] } = {}) {
 // ── Title filter ────────────────────────────────────────────────────
 
 function buildTitleFilter(titleFilter) {
-  const positive = (titleFilter?.positive || []).map(k => k.toLowerCase());
-  const negative = (titleFilter?.negative || []).map(k => k.toLowerCase());
+  // Compile each keyword to a word-boundary regex for alphanumeric/hyphen keywords
+  // (prevents "AI" matching "paid", "ML" matching "AML", etc.).
+  // Keywords with special chars like ".NET" fall back to substring match.
+  const compile = (k) => {
+    const t = k.trim();
+    if (/^[\w\s-]+$/.test(t)) {
+      const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return { re: new RegExp('\\b' + esc + '\\b', 'i') };
+    }
+    return { sub: t.toLowerCase() };
+  };
+  const hit = (c, title) => c.re ? c.re.test(title) : title.toLowerCase().includes(c.sub);
+
+  const positive = (titleFilter?.positive || []).map(compile);
+  const negative = (titleFilter?.negative || []).map(compile);
 
   return (title) => {
-    const lower = title.toLowerCase();
-    const hasPositive = positive.length === 0 || positive.some(k => lower.includes(k));
-    const hasNegative = negative.some(k => lower.includes(k));
+    const hasPositive = positive.length === 0 || positive.some(c => hit(c, title));
+    const hasNegative = negative.some(c => hit(c, title));
     return hasPositive && !hasNegative;
   };
 }
@@ -489,6 +504,78 @@ async function main() {
 
   await parallelFetch(tasks, CONCURRENCY);
 
+  // 5b. Aggregator phase — query-based sources (Adzuna / Arbeitnow / JSearch).
+  // One query → jobs from many employers. Results feed the SAME title/location
+  // filters and dedup sets as tracked companies, so an aggregator hit and an ATS
+  // hit for the same role collapse to one. Skipped when --company is set (that
+  // flag targets a single tracked company).
+  const apiCallCounts = new Map();
+  const usageMonth = date.slice(0, 7);
+  let aggregatorsPolled = 0;
+  const aggregators =
+    !filterCompany && config.aggregators && typeof config.aggregators === 'object'
+      ? config.aggregators
+      : {};
+
+  const aggregatorTasks = [];
+  for (const [aggId, aggConfig] of Object.entries(aggregators)) {
+    if (!aggConfig || typeof aggConfig !== 'object') continue;
+    if (aggConfig.enabled === false) continue;
+    const provider = providers.get(aggId);
+    if (!provider) {
+      console.error(`⚠️  aggregator "${aggId}" — no provider loaded; skipping`);
+      continue;
+    }
+    // Monthly-cap guard — protects free-tier quotas (e.g. JSearch ~200/mo).
+    const cap = Number(aggConfig.monthly_cap);
+    if (Number.isFinite(cap) && cap > 0) {
+      const used = getMonthlyCount(aggId, usageMonth);
+      if (used >= cap) {
+        console.error(`⚠️  ${aggId}: monthly cap reached (${used}/${cap}) — skipping this scan`);
+        continue;
+      }
+    }
+    aggregatorsPolled++;
+    const descriptor = {
+      name: aggId,
+      positive: config.title_filter?.positive || [],
+      location: {
+        country: aggConfig.country,
+        where: aggConfig.where,
+        allow: config.location_filter?.allow || [],
+        block: config.location_filter?.block || [],
+        always_allow: config.location_filter?.always_allow || [],
+      },
+      config: aggConfig,
+    };
+    aggregatorTasks.push(async () => {
+      const ctx = makeHttpCtx(apiCallCounts);
+      try {
+        const jobs = await provider.fetch(descriptor, ctx);
+        if (!Array.isArray(jobs)) {
+          throw new Error(`${aggId}: fetch() did not return an array`);
+        }
+        totalFound += jobs.length;
+        for (const job of jobs) {
+          if (!job || typeof job.url !== 'string' || !job.url) continue;
+          if (!titleFilter(job.title || '')) { totalFilteredTitle++; continue; }
+          if (!locationFilter(job.location)) { totalFilteredLocation++; continue; }
+          if (seenUrls.has(job.url)) { totalDupes++; continue; }
+          const key = `${(job.company || '').toLowerCase()}::${(job.title || '').toLowerCase()}`;
+          if (seenCompanyRoles.has(key)) { totalDupes++; continue; }
+          seenUrls.add(job.url);
+          seenCompanyRoles.add(key);
+          newOffers.push({ ...job, source: aggId });
+        }
+      } catch (err) {
+        errors.push({ company: `aggregator:${aggId}`, error: err.message });
+      }
+    });
+  }
+  if (aggregatorTasks.length > 0) {
+    await parallelFetch(aggregatorTasks, CONCURRENCY);
+  }
+
   // 5.5. Optional liveness verification — drop expired and guard-rejected postings
   let verifiedOffers = newOffers;
   let expiredOffers = [];
@@ -532,11 +619,22 @@ async function main() {
     }
   }
 
+  // 6b. Flush aggregator API usage into the monthly ledger (skip on dry-run —
+  // dry-run makes no file writes, matching tracked-company behavior).
+  if (!dryRun && apiCallCounts.size > 0) {
+    try {
+      addUsage(apiCallCounts, usageMonth);
+    } catch (err) {
+      console.error(`⚠️  could not update API usage ledger: ${err.message}`);
+    }
+  }
+
   // 7. Print summary
   console.log(`\n${'━'.repeat(45)}`);
   console.log(`Portal Scan — ${date}`);
   console.log(`${'━'.repeat(45)}`);
   console.log(`Companies scanned:     ${targets.length}`);
+  if (aggregatorsPolled > 0) console.log(`Aggregators polled:    ${aggregatorsPolled}`);
   console.log(`Total jobs found:      ${totalFound}`);
   console.log(`Filtered by title:     ${totalFilteredTitle} removed`);
   console.log(`Filtered by location:  ${totalFilteredLocation} removed`);
@@ -546,7 +644,25 @@ async function main() {
     console.log(`No apply control:      ${droppedOffers.length} dropped`);
     console.log(`Invalid (guarded):     ${invalidOffers.length} dropped`);
   }
+  if (apiCallCounts.size > 0) {
+    const parts = [...apiCallCounts.entries()].map(([s, n]) => `${s} ${n}`).join(', ');
+    console.log(`Aggregator API calls:  ${parts}`);
+  }
   console.log(`New offers added:      ${verifiedOffers.length}`);
+
+  // Per-source breakdown of added offers (tracked-company providers + aggregators).
+  if (verifiedOffers.length > 0) {
+    const bySource = new Map();
+    for (const o of verifiedOffers) {
+      const s = o.source || 'unknown';
+      bySource.set(s, (bySource.get(s) || 0) + 1);
+    }
+    const sources = [...bySource.entries()].sort((a, b) => b[1] - a[1]);
+    sources.forEach(([s, n], i) => {
+      const branch = i === sources.length - 1 ? '└─' : '├─';
+      console.log(`  ${branch} ${s.padEnd(16)} ${n}`);
+    });
+  }
 
   if (errors.length > 0) {
     console.log(`\nErrors (${errors.length}):`);

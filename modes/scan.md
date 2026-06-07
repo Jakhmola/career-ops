@@ -5,6 +5,35 @@ Escanea portales de empleo configurados, filtra por relevancia de título, y añ
 > **Nota (v1.6+):** El escáner por defecto (`scan.mjs` / `npm run scan`) es **zero-token** y usa fuentes estructuradas: parsers locales configurados por empresa y APIs públicas de Greenhouse, Ashby y Lever. Los niveles con Playwright/WebSearch descritos abajo son el flujo **agente** (ejecutado por Claude/Codex), no lo que hace `scan.mjs`. Si una empresa no tiene parser local ni API Greenhouse/Ashby/Lever, `scan.mjs` la ignorará; para esos casos, el agente debe completar manualmente el Nivel 1 (Playwright) o Nivel 3 (WebSearch).
 >
 > **Regla (v1.8+):** Si el parser local de una empresa termina con éxito en Nivel 0, el agente **no** debe repetir esa empresa en Playwright (Nivel 1) ni en API (Nivel 2). En Nivel 3, las queries generales siguen activas, pero se descartan resultados de empresas ya cubiertas por parser. Ver [Regla: local parser exitoso](#regla-local-parser-exitoso--no-repetir-scraping-caro).
+>
+> **Agregadores (v1.9+):** Además de las `tracked_companies` (una empresa por entrada, vía su ATS), `scan.mjs` consulta **agregadores** — fuentes basadas en query que devuelven ofertas de muchos empleadores en una sola llamada. Son zero-token (HTTP + JSON puro). Reutilizan `title_filter` + `location_filter` y se fusionan en la **misma** pasada de dedup que las empresas trackeadas. Ver la sección [Agregadores](#agregadores-fuentes-basadas-en-query) abajo.
+
+## Agregadores (fuentes basadas en query)
+
+A diferencia de un **Provider** (ligado a un único empleador), un **Agregador** devuelve ofertas de muchos empleadores en respuesta a una búsqueda (keywords + ubicación). Se configuran en el bloque `aggregators:` de `portals.yml` y viven como providers sin `detect()` en `providers/` (por lo que el loop por empresa nunca los auto-selecciona).
+
+| Agregador | Auth | Coste | Notas |
+|-----------|------|-------|-------|
+| **Arbeitnow** | ninguna | gratis | Feed EU/DE. Funciona sin clave. |
+| **Adzuna** | `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` | gratis | Cobertura NL/EU amplia + datos salariales. |
+| **JSearch** | `RAPIDAPI_KEY` (header `x-api-key`) | gratis ~200/mes | Vía [OpenWebNinja](https://app.openwebninja.com/api/jsearch). Única vía legítima para aflorar LinkedIn/Indeed/Glassdoor (índice Google for Jobs). Llega **desactivado** por defecto. |
+
+**Claves (`.env`):** Las claves de API son capa de usuario y viven en `.env` (gitignored; plantilla en `.env.example`). `scan.mjs` carga `.env` automáticamente vía `dotenv`. Si falta una clave requerida, ese agregador se omite en silencio (devuelve `[]`, sin error) — Arbeitnow no necesita clave.
+
+**Cuota y contador de uso:** Para proteger el límite gratuito de JSearch (~200/mes), `scan.mjs` mantiene un contador mensual por fuente en `data/api-usage.tsv` (generado, gitignored). Si un agregador define `monthly_cap` y el conteo del mes ya lo alcanzó, se omite con un aviso **antes** de llamar a la API. Tras el scan, los conteos se vuelcan al ledger (excepto en `--dry-run`).
+
+**Salida por fuente:** El resumen del scan muestra el desglose de ofertas añadidas por `source` (`adzuna`, `arbeitnow`, `jsearch`, `greenhouse-api`, …) y las llamadas a API por agregador, p. ej.:
+
+```
+Aggregators polled:    2
+Aggregator API calls:  arbeitnow 2, adzuna 1
+New offers added:      18
+  ├─ adzuna           9
+  ├─ arbeitnow        6
+  └─ jsearch          3
+```
+
+**Alcance:** Los agregadores se ejecutan en `node scan.mjs` (sin flags). Se omiten cuando se pasa `--company <X>` (ese flag apunta a una única empresa trackeada). Respetan `--dry-run` (consultan pero no escriben archivos ni ledger).
 
 ## Ejecución recomendada
 

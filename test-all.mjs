@@ -1016,6 +1016,147 @@ try {
   fail(`recruitee provider tests crashed: ${e.message}`);
 }
 
+// ── 15. AGGREGATORS — arbeitnow / adzuna / jsearch + usage ledger ────
+
+console.log('\n15. Aggregators + usage ledger');
+
+try {
+  const arbeitnow = (await import(pathToFileURL(join(ROOT, 'providers/arbeitnow.mjs')).href)).default;
+  const adzuna = (await import(pathToFileURL(join(ROOT, 'providers/adzuna.mjs')).href)).default;
+  const jsearch = (await import(pathToFileURL(join(ROOT, 'providers/jsearch.mjs')).href)).default;
+  const { parseArbeitnowResponse } = await import(pathToFileURL(join(ROOT, 'providers/arbeitnow.mjs')).href);
+  const { parseAdzunaResponse } = await import(pathToFileURL(join(ROOT, 'providers/adzuna.mjs')).href);
+  const { parseJSearchResponse } = await import(pathToFileURL(join(ROOT, 'providers/jsearch.mjs')).href);
+
+  if (arbeitnow.id === 'arbeitnow' && adzuna.id === 'adzuna' && jsearch.id === 'jsearch') {
+    pass('aggregator ids are arbeitnow/adzuna/jsearch');
+  } else {
+    fail(`aggregator ids: ${arbeitnow.id}/${adzuna.id}/${jsearch.id}`);
+  }
+
+  // CRITICAL: aggregators must NOT export detect(), or resolveProvider() would
+  // wrongly consider them for per-company resolution.
+  if (arbeitnow.detect === undefined && adzuna.detect === undefined && jsearch.detect === undefined) {
+    pass('aggregators export no detect() (never auto-matched to a tracked company)');
+  } else {
+    fail('an aggregator unexpectedly exports detect()');
+  }
+
+  if ([arbeitnow, adzuna, jsearch].every(p => typeof p.fetch === 'function')) {
+    pass('aggregators export fetch()');
+  } else {
+    fail('an aggregator is missing fetch()');
+  }
+
+  // parseArbeitnowResponse
+  const ab = parseArbeitnowResponse({ data: [
+    { title: 'AI Engineer', company_name: 'Acme', url: 'https://www.arbeitnow.com/jobs/ai-1', location: 'Amsterdam' },
+    { title: 'No URL', company_name: 'X' },
+  ]});
+  if (ab.length === 1 && ab[0].title === 'AI Engineer' && ab[0].url === 'https://www.arbeitnow.com/jobs/ai-1' && ab[0].company === 'Acme' && ab[0].location === 'Amsterdam') {
+    pass('parseArbeitnowResponse maps fields and skips rows without url');
+  } else {
+    fail(`parseArbeitnowResponse = ${JSON.stringify(ab)}`);
+  }
+  if (parseArbeitnowResponse({}).length === 0 && parseArbeitnowResponse(null).length === 0) {
+    pass('parseArbeitnowResponse: empty/null → [] (no crash)');
+  } else {
+    fail('parseArbeitnowResponse should return [] for empty/null');
+  }
+
+  // parseAdzunaResponse
+  const az = parseAdzunaResponse({ results: [
+    { title: 'ML Engineer', redirect_url: 'https://www.adzuna.nl/land/ad/1', company: { display_name: 'Beta' }, location: { display_name: 'Utrecht' } },
+    { title: 'No redirect_url', company: { display_name: 'Y' } },
+  ]});
+  if (az.length === 1 && az[0].url === 'https://www.adzuna.nl/land/ad/1' && az[0].company === 'Beta' && az[0].location === 'Utrecht') {
+    pass('parseAdzunaResponse maps redirect_url/company/location and skips rows without url');
+  } else {
+    fail(`parseAdzunaResponse = ${JSON.stringify(az)}`);
+  }
+  if (parseAdzunaResponse({}).length === 0 && parseAdzunaResponse({ results: null }).length === 0) {
+    pass('parseAdzunaResponse: empty/null results → [] (no crash)');
+  } else {
+    fail('parseAdzunaResponse should return [] for empty/null results');
+  }
+
+  // parseJSearchResponse
+  const js = parseJSearchResponse({ data: [
+    { job_title: 'LLM Engineer', employer_name: 'Gamma', job_apply_link: 'https://linkedin.com/jobs/1', job_city: 'Rotterdam', job_country: 'NL' },
+    { job_title: 'No link' },
+  ]});
+  if (js.length === 1 && js[0].url === 'https://linkedin.com/jobs/1' && js[0].company === 'Gamma' && js[0].location === 'Rotterdam, NL') {
+    pass('parseJSearchResponse maps job_*/employer_name and joins city/country, skips rows without link');
+  } else {
+    fail(`parseJSearchResponse = ${JSON.stringify(js)}`);
+  }
+  if (parseJSearchResponse({}).length === 0 && parseJSearchResponse({ data: 'x' }).length === 0) {
+    pass('parseJSearchResponse: empty/malformed data → [] (no crash)');
+  } else {
+    fail('parseJSearchResponse should return [] for empty/malformed data');
+  }
+
+  // Missing-key dormancy: adzuna/jsearch return [] without touching the network.
+  const savedAdzId = process.env.ADZUNA_APP_ID;
+  const savedAdzKey = process.env.ADZUNA_APP_KEY;
+  const savedRapid = process.env.RAPIDAPI_KEY;
+  delete process.env.ADZUNA_APP_ID;
+  delete process.env.ADZUNA_APP_KEY;
+  delete process.env.RAPIDAPI_KEY;
+  const noNetCtx = {
+    transport: 'http',
+    recordCall() {},
+    fetchJson: async () => { throw new Error('network must not be called when key is missing'); },
+    fetchText: async () => { throw new Error('network must not be called when key is missing'); },
+  };
+  const adzEmpty = await adzuna.fetch({ name: 'adzuna', positive: ['AI'], config: {} }, noNetCtx);
+  const jsEmpty = await jsearch.fetch({ name: 'jsearch', positive: ['AI'], config: {} }, noNetCtx);
+  if (Array.isArray(adzEmpty) && adzEmpty.length === 0 && Array.isArray(jsEmpty) && jsEmpty.length === 0) {
+    pass('adzuna/jsearch return [] (dormant) when API keys are absent');
+  } else {
+    fail(`missing-key dormancy: adzuna=${JSON.stringify(adzEmpty)}, jsearch=${JSON.stringify(jsEmpty)}`);
+  }
+  if (savedAdzId !== undefined) process.env.ADZUNA_APP_ID = savedAdzId;
+  if (savedAdzKey !== undefined) process.env.ADZUNA_APP_KEY = savedAdzKey;
+  if (savedRapid !== undefined) process.env.RAPIDAPI_KEY = savedRapid;
+
+  // Usage ledger roundtrip in a temp file.
+  const { addUsage, getMonthlyCount } = await import(pathToFileURL(join(ROOT, 'usage-ledger.mjs')).href);
+  const tmpDir = mkdtempSync(join(tmpdir(), 'career-ops-usage-'));
+  try {
+    const file = join(tmpDir, 'api-usage.tsv');
+    if (getMonthlyCount('adzuna', '2026-06', file) === 0) pass('usage ledger: missing file → count 0');
+    else fail('usage ledger: missing file should yield 0');
+    addUsage({ adzuna: 2, jsearch: 1 }, '2026-06', file);
+    addUsage(new Map([['adzuna', 3]]), '2026-06', file);
+    if (getMonthlyCount('adzuna', '2026-06', file) === 5 && getMonthlyCount('jsearch', '2026-06', file) === 1) {
+      pass('usage ledger: addUsage accumulates across object + Map inputs');
+    } else {
+      fail(`usage ledger accumulation wrong: adzuna=${getMonthlyCount('adzuna', '2026-06', file)}, jsearch=${getMonthlyCount('jsearch', '2026-06', file)}`);
+    }
+    if (getMonthlyCount('adzuna', '2026-05', file) === 0) pass('usage ledger: counts are scoped per month');
+    else fail('usage ledger: month scoping failed');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  // scan.mjs wires the aggregator path (string-includes, mirrors existing checks).
+  const aggScanScript = readFile('scan.mjs');
+  if (
+    aggScanScript.includes('config.aggregators') &&
+    aggScanScript.includes('dotenv/config') &&
+    aggScanScript.includes('getMonthlyCount') &&
+    aggScanScript.includes('addUsage')
+  ) {
+    pass('scan.mjs loads dotenv, reads config.aggregators, and guards/flushes the usage ledger');
+  } else {
+    fail('scan.mjs is missing aggregator wiring (dotenv / config.aggregators / usage ledger)');
+  }
+
+} catch (e) {
+  fail(`aggregator provider tests crashed: ${e.message}`);
+}
+
 // ── 12. TRACKER REPORT LINK NORMALIZATION (#760) ────────────────
 
 console.log('\n12. Tracker report-link normalization');

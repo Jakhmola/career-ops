@@ -3,6 +3,7 @@ cv.md
 data/applications.md
 data/pipeline.md
 data/scan-history.tsv
+data/api-usage.tsv
 data/parser-output/**/*.json
 !data/parser-output/.gitkeep
 !data/parser-output/**/.gitkeep
@@ -26,6 +27,7 @@ writing-samples/*
 # User config and customization (never auto-updated)
 config/profile.yml
 portals.yml
+portals.yml.bak
 modes/_profile.md
 .update-dismissed
 .update-lock
