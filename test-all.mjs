@@ -1163,7 +1163,7 @@ console.log('\n15b. Scraper (jobspy)');
 
 try {
   const jobspy = (await import(pathToFileURL(join(ROOT, 'providers/jobspy.mjs')).href)).default;
-  const { mapJobspyRecords, normalizeSites } =
+  const { mapJobspyRecords, normalizeSites, normalizeTerms } =
     await import(pathToFileURL(join(ROOT, 'providers/jobspy.mjs')).href);
   const { jdFilename, renderJd } = await import(pathToFileURL(join(ROOT, 'providers/_jd.mjs')).href);
 
@@ -1208,6 +1208,29 @@ try {
     pass('normalizeSites: defaults to 3 boards, drops unknown/dupes, honors results_wanted');
   } else {
     fail(`normalizeSites def=${JSON.stringify(def)} custom=${JSON.stringify(custom)}`);
+  }
+
+  // normalizeTerms: trims, drops empty/non-string entries.
+  const nt = normalizeTerms(['  AI  ', '', 42, null, '"ML Engineer"']);
+  if (nt.length === 2 && nt[0] === 'AI' && nt[1] === '"ML Engineer"') {
+    pass('normalizeTerms: trims and drops empty/non-string entries');
+  } else {
+    fail(`normalizeTerms = ${JSON.stringify(nt)}`);
+  }
+
+  // normalizeSites: carries an optional per-site search_terms override (so Indeed
+  // can run broad tokens while LinkedIn keeps the narrow default) — present only
+  // when configured.
+  const perSite = normalizeSites([
+    { name: 'indeed', results_wanted: 1000, search_terms: ['AI', '"Data Scientist"'] },
+    { name: 'linkedin', results_wanted: 200 },
+  ]);
+  if (perSite.length === 2 &&
+      JSON.stringify(perSite[0].search_terms) === JSON.stringify(['AI', '"Data Scientist"']) &&
+      perSite[1].search_terms === undefined) {
+    pass('normalizeSites: carries per-site search_terms only when provided');
+  } else {
+    fail(`normalizeSites per-site = ${JSON.stringify(perSite)}`);
   }
 
   // jdFilename: slugifies company+role, adds a hash suffix on collision.

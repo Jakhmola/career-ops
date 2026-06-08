@@ -61,16 +61,21 @@ export default {
   async fetch(descriptor, ctx) {
     const cfg = descriptor?.config || {};
 
-    const searchTerms = (Array.isArray(cfg.search_terms) ? cfg.search_terms : [])
-      .filter((t) => typeof t === 'string' && t.trim())
-      .map((t) => t.trim());
-    if (searchTerms.length === 0) {
-      console.log('jobspy: skipped — no search_terms configured in portals.yml scrapers.jobspy');
-      return [];
-    }
+    const defaultTerms = normalizeTerms(cfg.search_terms);
 
     const pythonBin = resolvePython();
     const sites = normalizeSites(cfg.sites);
+    // Each site uses its OWN search_terms when set, else the shared default.
+    // This is the per-site fan-out control: broad single tokens (e.g. "AI")
+    // belong ONLY on boards with no burst limit (Indeed). Putting "AI" on
+    // LinkedIn 429s + IP-blocks the home box — so Indeed can override with a
+    // wider list than LinkedIn safely uses.
+    const siteTerms = (site) =>
+      site.search_terms && site.search_terms.length ? site.search_terms : defaultTerms;
+    if (!sites.some((s) => siteTerms(s).length > 0)) {
+      console.log('jobspy: skipped — no search_terms configured in portals.yml scrapers.jobspy');
+      return [];
+    }
     const location = typeof cfg.location === 'string' ? cfg.location.trim() : '';
     const countryIndeed =
       typeof cfg.country_indeed === 'string' ? cfg.country_indeed.trim() : '';
@@ -86,9 +91,10 @@ export default {
     let lastErr = null;
 
     // One subprocess per (site × group). Sequential: parallel scrapes from the
-    // same home IP are exactly what trips rate limits.
-    for (const group of searchTerms) {
-      for (const site of sites) {
+    // same home IP are exactly what trips rate limits. Site-outer so each board's
+    // (possibly different) term list is grouped together.
+    for (const site of sites) {
+      for (const group of siteTerms(site)) {
         const wanted = maxResultsOverride > 0
           ? Math.min(maxResultsOverride, site.results_wanted)
           : site.results_wanted;
@@ -146,12 +152,26 @@ export default {
 // ── Helpers (exported for unit tests — no network / no subprocess) ──────────
 
 /**
- * Normalize the `sites` config into [{name, results_wanted}]. Tolerates a bare
- * list of strings (["linkedin","indeed"]) or objects, and falls back to the
- * three default boards when absent. Unknown site names are dropped.
+ * Normalize a search_terms list into trimmed, non-empty strings. Shared by the
+ * top-level (default) list and the optional per-site override. Exported for tests.
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+export function normalizeTerms(value) {
+  return (Array.isArray(value) ? value : [])
+    .filter((t) => typeof t === 'string' && t.trim())
+    .map((t) => t.trim());
+}
+
+/**
+ * Normalize the `sites` config into [{name, results_wanted, search_terms?}].
+ * Tolerates a bare list of strings (["linkedin","indeed"]) or objects, and
+ * falls back to the three default boards when absent. Unknown site names are
+ * dropped. An optional per-site `search_terms` array is carried through so a
+ * board can override the shared default list.
  *
  * @param {unknown} value
- * @returns {{name: string, results_wanted: number}[]}
+ * @returns {{name: string, results_wanted: number, search_terms?: string[]}[]}
  */
 export function normalizeSites(value) {
   const VALID = new Set(['linkedin', 'indeed', 'google']);
@@ -162,17 +182,20 @@ export function normalizeSites(value) {
   for (const item of value) {
     let name;
     let wanted;
+    let perSiteTerms = [];
     if (typeof item === 'string') {
       name = item.trim().toLowerCase();
     } else if (item && typeof item === 'object') {
       name = String(item.name || '').trim().toLowerCase();
       wanted = Number(item.results_wanted);
+      perSiteTerms = normalizeTerms(item.search_terms);
     }
     if (!name || !VALID.has(name) || seen.has(name)) continue;
     seen.add(name);
     out.push({
       name,
       results_wanted: Number.isFinite(wanted) && wanted > 0 ? Math.trunc(wanted) : (defaults.get(name) || 50),
+      ...(perSiteTerms.length ? { search_terms: perSiteTerms } : {}),
     });
   }
   return out.length > 0 ? out : DEFAULT_SITES.map((s) => ({ ...s }));
