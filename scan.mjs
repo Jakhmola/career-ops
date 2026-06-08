@@ -35,6 +35,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 
 import { makeHttpCtx } from './providers/_http.mjs';
+import { jdFilename, renderJd } from './providers/_jd.mjs';
 import { getMonthlyCount, addUsage } from './usage-ledger.mjs';
 
 const parseYaml = yaml.load;
@@ -45,6 +46,7 @@ const PORTALS_PATH = process.env.CAREER_OPS_PORTALS || 'portals.yml';
 const SCAN_HISTORY_PATH = 'data/scan-history.tsv';
 const PIPELINE_PATH = 'data/pipeline.md';
 const APPLICATIONS_PATH = 'data/applications.md';
+const JDS_DIR = 'jds';
 const PROVIDERS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'providers');
 
 // Ensure required directories exist (fresh setup)
@@ -121,22 +123,27 @@ function resolveProvider(entry, providers, { skipIds = [] } = {}) {
 
 // ── Title filter ────────────────────────────────────────────────────
 
-function buildTitleFilter(titleFilter) {
+export function buildTitleFilter(titleFilter) {
   // Compile each keyword to a word-boundary regex for alphanumeric/hyphen keywords
   // (prevents "AI" matching "paid", "ML" matching "AML", etc.).
   // Keywords with special chars like ".NET" fall back to substring match.
-  const compile = (k) => {
+  // `plural` (negatives only) appends an optional trailing "s" so "Professor"
+  // also drops "Professors", "Manager"→"Managers", "Lead"→"Leads", etc. It is
+  // NOT applied to positives: matching is the strict direction there, so we
+  // don't loosen 2-char tokens like "AI"/"ML" into "AIS"/"MLS". Special-char
+  // keywords (".NET") stay substring and are unaffected.
+  const compile = (k, plural = false) => {
     const t = k.trim();
     if (/^[\w\s-]+$/.test(t)) {
       const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return { re: new RegExp('\\b' + esc + '\\b', 'i') };
+      return { re: new RegExp('\\b' + esc + (plural ? 's?' : '') + '\\b', 'i') };
     }
     return { sub: t.toLowerCase() };
   };
   const hit = (c, title) => c.re ? c.re.test(title) : title.toLowerCase().includes(c.sub);
 
-  const positive = (titleFilter?.positive || []).map(compile);
-  const negative = (titleFilter?.negative || []).map(compile);
+  const positive = (titleFilter?.positive || []).map(k => compile(k));
+  const negative = (titleFilter?.negative || []).map(k => compile(k, true));
 
   return (title) => {
     const hasPositive = positive.length === 0 || positive.some(c => hit(c, title));
@@ -190,6 +197,28 @@ export function buildLocationFilter(locationFilter) {
 
 // ── Dedup ───────────────────────────────────────────────────────────
 
+// Normalize a company+title pair into a stable dedup key so the SAME role
+// surfaced by different sources collapses to one — notably LinkedIn vs Indeed
+// (the JobSpy scraper hits BOTH), which name the employer differently
+// ("CGI" vs "CGI Nederland", "X" vs "X (IND)") under different URLs. Drops
+// parentheticals, common corporate suffixes, and punctuation. Conservative:
+// the normalized TITLE must still match, so distinct roles at one employer stay
+// separate. Exported for tests.
+const COMPANY_SUFFIXES =
+  /\b(nederland|netherlands|bv|gmbh|inc|incorporated|ltd|limited|llc|nl|se|ag|plc|group|holding|holdings|nv)\b/g;
+
+export function companyRoleKey(company, title) {
+  const norm = (s) => String(s || '')
+    .toLowerCase()
+    .replace(/\(.*?\)/g, ' ')        // drop "(IND)", "(m/f/d)", etc.
+    .replace(/[.'`’]/g, '')          // collapse abbreviations so "b.v." → "bv"
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const co = norm(company).replace(COMPANY_SUFFIXES, ' ').replace(/\s+/g, ' ').trim();
+  const ti = norm(title).replace(/\s+/g, ' ').trim();
+  return `${co}::${ti}`;
+}
+
 function loadSeenUrls() {
   const seen = new Set();
 
@@ -227,10 +256,10 @@ function loadSeenCompanyRoles() {
     const text = readFileSync(APPLICATIONS_PATH, 'utf-8');
     // Parse markdown table rows: | # | Date | Company | Role | ...
     for (const match of text.matchAll(/\|[^|]+\|[^|]+\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/g)) {
-      const company = match[1].trim().toLowerCase();
-      const role = match[2].trim().toLowerCase();
-      if (company && role && company !== 'company') {
-        seen.add(`${company}::${role}`);
+      const company = match[1].trim();
+      const role = match[2].trim();
+      if (company && role && company.toLowerCase() !== 'company') {
+        seen.add(companyRoleKey(company, role));
       }
     }
   }
@@ -244,26 +273,49 @@ function appendToPipeline(offers) {
 
   let text = readFileSync(PIPELINE_PATH, 'utf-8');
 
-  // Find "## Pendientes" section and append after it
-  const marker = '## Pendientes';
-  const idx = text.indexOf(marker);
+  // The pipeline line carries `pipelineUrl` when present (e.g. a scraper's
+  // `local:jds/...` ref, so evaluation reads the JD offline instead of hitting a
+  // login wall) and falls back to the canonical URL otherwise. Dedup, liveness
+  // verification, and scan-history all keep `o.url` (the employer URL).
+  const pipelineLine = (o) => `- [ ] ${o.pipelineUrl || o.url} | ${o.company} | ${o.title}`;
+
+  // Support both English ("## Pending") and Spanish ("## Pendientes") markers so
+  // the function works regardless of which language the file was initialised with.
+  // The first marker found wins; the Spanish processed header is also recognised
+  // so the fallback create path picks the right processed-section counterpart.
+  const PENDING_MARKERS = ['## Pending', '## Pendientes'];
+  const PROCESSED_MARKERS = ['## Processed', '## Procesadas'];
+
+  // Find the first existing Pending section.
+  let markerUsed = null;
+  let idx = -1;
+  for (const m of PENDING_MARKERS) {
+    const i = text.indexOf(m);
+    if (i !== -1 && (idx === -1 || i < idx)) {
+      idx = i;
+      markerUsed = m;
+    }
+  }
+
   if (idx === -1) {
-    // No Pendientes section — append at end before Procesadas
-    const procIdx = text.indexOf('## Procesadas');
+    // No Pending section exists yet — create one before the Processed section
+    // (or at end of file if there is no Processed section either).
+    const newMarker = PENDING_MARKERS[0]; // always create as English
+    let procIdx = -1;
+    for (const m of PROCESSED_MARKERS) {
+      const i = text.indexOf(m);
+      if (i !== -1 && (procIdx === -1 || i < procIdx)) procIdx = i;
+    }
     const insertAt = procIdx === -1 ? text.length : procIdx;
-    const block = `\n${marker}\n\n` + offers.map(o =>
-      `- [ ] ${o.url} | ${o.company} | ${o.title}`
-    ).join('\n') + '\n\n';
+    const block = `\n${newMarker}\n\n` + offers.map(pipelineLine).join('\n') + '\n\n';
     text = text.slice(0, insertAt) + block + text.slice(insertAt);
   } else {
-    // Find the end of existing Pendientes content (next ## or end)
-    const afterMarker = idx + marker.length;
+    // Append into the existing Pending section (just before the next ## heading).
+    const afterMarker = idx + markerUsed.length;
     const nextSection = text.indexOf('\n## ', afterMarker);
     const insertAt = nextSection === -1 ? text.length : nextSection;
 
-    const block = '\n' + offers.map(o =>
-      `- [ ] ${o.url} | ${o.company} | ${o.title}`
-    ).join('\n') + '\n';
+    const block = '\n' + offers.map(pipelineLine).join('\n') + '\n';
     text = text.slice(0, insertAt) + block + text.slice(insertAt);
   }
 
@@ -487,7 +539,7 @@ async function main() {
           totalDupes++;
           continue;
         }
-        const key = `${job.company.toLowerCase()}::${job.title.toLowerCase()}`;
+        const key = companyRoleKey(job.company, job.title);
         if (seenCompanyRoles.has(key)) {
           totalDupes++;
           continue;
@@ -561,7 +613,7 @@ async function main() {
           if (!titleFilter(job.title || '')) { totalFilteredTitle++; continue; }
           if (!locationFilter(job.location)) { totalFilteredLocation++; continue; }
           if (seenUrls.has(job.url)) { totalDupes++; continue; }
-          const key = `${(job.company || '').toLowerCase()}::${(job.title || '').toLowerCase()}`;
+          const key = companyRoleKey(job.company, job.title);
           if (seenCompanyRoles.has(key)) { totalDupes++; continue; }
           seenUrls.add(job.url);
           seenCompanyRoles.add(key);
@@ -574,6 +626,93 @@ async function main() {
   }
   if (aggregatorTasks.length > 0) {
     await parallelFetch(aggregatorTasks, CONCURRENCY);
+  }
+
+  // 5c. Scraper phase — query-based sources that SCRAPE boards (LinkedIn/Indeed/
+  // Google via JobSpy) instead of calling a vendor API (docs/adr/0002). Siblings
+  // of the aggregators: results feed the SAME title/location filters and dedup
+  // sets, so a scraped hit and an ATS/aggregator hit for the same role collapse
+  // to one. A scraper carries its OWN search_terms (kept separate from
+  // title_filter.positive — broad single tokens belong in the filter, not the
+  // search). No quota/usage ledger (scraping is free). Skipped when --company is
+  // set. dryRun is threaded so providers can skip side-effects (e.g. writing JDs).
+  let scrapersPolled = 0;
+  const scrapers =
+    !filterCompany && config.scrapers && typeof config.scrapers === 'object'
+      ? config.scrapers
+      : {};
+
+  const scraperTasks = [];
+  const jdUsedNames = new Set(); // de-dup JD filenames across all scraped offers this scan
+  for (const [scrId, scrConfig] of Object.entries(scrapers)) {
+    if (!scrConfig || typeof scrConfig !== 'object') continue;
+    if (scrConfig.enabled === false) continue;
+    const provider = providers.get(scrId);
+    if (!provider) {
+      console.error(`⚠️  scraper "${scrId}" — no provider loaded; skipping`);
+      continue;
+    }
+    scrapersPolled++;
+    const descriptor = {
+      name: scrId,
+      dryRun,
+      location: {
+        country: scrConfig.country_indeed,
+        where: scrConfig.location,
+        allow: config.location_filter?.allow || [],
+        block: config.location_filter?.block || [],
+        always_allow: config.location_filter?.always_allow || [],
+      },
+      config: scrConfig,
+    };
+    scraperTasks.push(async () => {
+      // No counts map: scrapers have no metered quota, so recordCall is an inert
+      // no-op and the API-usage ledger stays aggregator-only.
+      const ctx = makeHttpCtx();
+      try {
+        const jobs = await provider.fetch(descriptor, ctx);
+        if (!Array.isArray(jobs)) {
+          throw new Error(`${scrId}: fetch() did not return an array`);
+        }
+        totalFound += jobs.length;
+        for (const job of jobs) {
+          if (!job || typeof job.url !== 'string' || !job.url) continue;
+          if (!titleFilter(job.title || '')) { totalFilteredTitle++; continue; }
+          if (!locationFilter(job.location)) { totalFilteredLocation++; continue; }
+          if (seenUrls.has(job.url)) { totalDupes++; continue; }
+          const key = companyRoleKey(job.company, job.title);
+          if (seenCompanyRoles.has(key)) { totalDupes++; continue; }
+          seenUrls.add(job.url);
+          seenCompanyRoles.add(key);
+          // `board` (job.site, e.g. linkedin/indeed) rides along so the summary
+          // can break a scraper's contribution down per board.
+          const offer = { title: job.title, url: job.url, company: job.company, location: job.location, source: scrId, board: job.site };
+          // Persist the captured JD (scrapers attach `description`) for offers we
+          // KEEP, then reference it offline via local:jds/. Skipped on dry-run to
+          // honor the no-write contract. The canonical url stays on the offer for
+          // dedup/verify/scan-history; only pipeline.md uses the local ref.
+          if (!dryRun && job.description) {
+            const file = jdFilename(job, jdUsedNames);
+            try {
+              if (!existsSync(JDS_DIR)) mkdirSync(JDS_DIR, { recursive: true });
+              writeFileSync(path.join(JDS_DIR, file), renderJd(job), 'utf-8');
+              offer.pipelineUrl = `local:jds/${file}`;
+            } catch (err) {
+              console.error(`⚠️  ${scrId}: could not write jds/${file} — ${err.message}`);
+            }
+          }
+          newOffers.push(offer);
+        }
+      } catch (err) {
+        errors.push({ company: `scraper:${scrId}`, error: err.message });
+      }
+    });
+  }
+  // Scrapers run sequentially against the same home IP inside each provider;
+  // run the providers themselves sequentially too (concurrency 1) so two
+  // scrapers can't hammer overlapping boards at once.
+  if (scraperTasks.length > 0) {
+    await parallelFetch(scraperTasks, 1);
   }
 
   // 5.5. Optional liveness verification — drop expired and guard-rejected postings
@@ -635,6 +774,7 @@ async function main() {
   console.log(`${'━'.repeat(45)}`);
   console.log(`Companies scanned:     ${targets.length}`);
   if (aggregatorsPolled > 0) console.log(`Aggregators polled:    ${aggregatorsPolled}`);
+  if (scrapersPolled > 0) console.log(`Scrapers polled:       ${scrapersPolled}`);
   console.log(`Total jobs found:      ${totalFound}`);
   console.log(`Filtered by title:     ${totalFilteredTitle} removed`);
   console.log(`Filtered by location:  ${totalFilteredLocation} removed`);
@@ -650,17 +790,33 @@ async function main() {
   }
   console.log(`New offers added:      ${verifiedOffers.length}`);
 
-  // Per-source breakdown of added offers (tracked-company providers + aggregators).
+  // Per-source breakdown of added offers (tracked-company providers + aggregators
+  // + scrapers). Scraper sources carry a `board` (e.g. linkedin/indeed), so their
+  // line gets an indented per-board sub-tree.
   if (verifiedOffers.length > 0) {
     const bySource = new Map();
+    const byBoard = new Map(); // source -> Map(board -> count)
     for (const o of verifiedOffers) {
       const s = o.source || 'unknown';
       bySource.set(s, (bySource.get(s) || 0) + 1);
+      if (o.board) {
+        if (!byBoard.has(s)) byBoard.set(s, new Map());
+        const bm = byBoard.get(s);
+        bm.set(o.board, (bm.get(o.board) || 0) + 1);
+      }
     }
     const sources = [...bySource.entries()].sort((a, b) => b[1] - a[1]);
     sources.forEach(([s, n], i) => {
-      const branch = i === sources.length - 1 ? '└─' : '├─';
-      console.log(`  ${branch} ${s.padEnd(16)} ${n}`);
+      const last = i === sources.length - 1;
+      console.log(`  ${last ? '└─' : '├─'} ${s.padEnd(16)} ${n}`);
+      const boards = byBoard.get(s);
+      if (boards) {
+        const cont = last ? '   ' : '│  ';
+        const entries = [...boards.entries()].sort((a, b) => b[1] - a[1]);
+        entries.forEach(([b, bn], j) => {
+          console.log(`  ${cont} ${j === entries.length - 1 ? '└─' : '├─'} ${b.padEnd(13)} ${bn}`);
+        });
+      }
     });
   }
 

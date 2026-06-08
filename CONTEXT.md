@@ -14,9 +14,20 @@ _Avoid_: portal, integration, connector
 
 **Aggregator**:
 A query-based job source that returns postings from many employers in response
-to a search (keywords + location). Adzuna, Arbeitnow, and JSearch are
-aggregators. Distinct from a Provider, which is tied to one employer.
-_Avoid_: portal, board, scraper, API
+to a search (keywords + location), fetched through a legitimate public API.
+Adzuna, Arbeitnow, and JSearch are aggregators. Distinct from a Provider (tied to
+one employer) and from a Scraper (same query-based role, but fetches by scraping
+a job board instead of via an API).
+_Avoid_: portal, board, connector
+
+**Scraper**:
+A query-based job source that returns postings from many employers by scraping a
+public job board's search results — LinkedIn, Indeed, Google Jobs — rather than
+calling an API. Plays the same role in a Scan as an Aggregator (reuses the title
+and location filters and the shared dedup pass), but is named separately because
+its access mechanism carries ToS-gray status, IP-reputation / rate-limit risk,
+and markup fragility that an API-backed Aggregator does not. Backed by JobSpy.
+_Avoid_: crawler, bot, portal
 
 **Tracked company**:
 A single employer the scanner watches directly via its Provider. Curated by the
