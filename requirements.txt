@@ -1,0 +1,16 @@
+# Python dependencies for the optional JobSpy scraper source.
+# Only needed if you enable `scrapers.jobspy` in portals.yml (LinkedIn/Indeed/
+# Google Jobs discovery). The rest of career-ops is pure Node and needs none of
+# this. See docs/adr/0002-scrape-via-jobspy.md.
+#
+# Recommended (works everywhere, incl. PEP-668 "externally managed" distros like
+# Arch/Debian where system pip is blocked):
+#
+#   python -m venv .venv
+#   .venv/bin/pip install -r requirements.txt      (Python 3.10+)
+#
+# providers/jobspy.mjs auto-detects ./.venv (or honors $JOBSPY_PYTHON), so after
+# this `node scan.mjs` just works. Driven as a subprocess via jobspy_runner.py.
+# If this package is absent the scraper stays dormant (returns nothing) — never
+# errors.
+python-jobspy>=1.1.80

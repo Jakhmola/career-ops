@@ -47,6 +47,12 @@ modes/_profile.md
 node_modules/
 bun.lock
 
+# Python (JobSpy scraper venv + caches — see requirements.txt / docs/adr/0002)
+.venv/
+venv/
+__pycache__/
+*.pyc
+
 # OS
 .DS_Store
 *.mov
