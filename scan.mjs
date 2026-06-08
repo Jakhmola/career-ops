@@ -127,18 +127,23 @@ export function buildTitleFilter(titleFilter) {
   // Compile each keyword to a word-boundary regex for alphanumeric/hyphen keywords
   // (prevents "AI" matching "paid", "ML" matching "AML", etc.).
   // Keywords with special chars like ".NET" fall back to substring match.
-  const compile = (k) => {
+  // `plural` (negatives only) appends an optional trailing "s" so "Professor"
+  // also drops "Professors", "Manager"→"Managers", "Lead"→"Leads", etc. It is
+  // NOT applied to positives: matching is the strict direction there, so we
+  // don't loosen 2-char tokens like "AI"/"ML" into "AIS"/"MLS". Special-char
+  // keywords (".NET") stay substring and are unaffected.
+  const compile = (k, plural = false) => {
     const t = k.trim();
     if (/^[\w\s-]+$/.test(t)) {
       const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return { re: new RegExp('\\b' + esc + '\\b', 'i') };
+      return { re: new RegExp('\\b' + esc + (plural ? 's?' : '') + '\\b', 'i') };
     }
     return { sub: t.toLowerCase() };
   };
   const hit = (c, title) => c.re ? c.re.test(title) : title.toLowerCase().includes(c.sub);
 
-  const positive = (titleFilter?.positive || []).map(compile);
-  const negative = (titleFilter?.negative || []).map(compile);
+  const positive = (titleFilter?.positive || []).map(k => compile(k));
+  const negative = (titleFilter?.negative || []).map(k => compile(k, true));
 
   return (title) => {
     const hasPositive = positive.length === 0 || positive.some(c => hit(c, title));
