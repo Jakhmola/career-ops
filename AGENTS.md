@@ -64,24 +64,23 @@ AI-powered, CLI-agnostic job search automation: pipeline tracking, offer evaluat
 | `analyze-patterns.mjs` | Pattern analysis script (JSON output) |
 | `followup-cadence.mjs` | Follow-up cadence calculator (JSON output) |
 | `data/follow-ups.md` | Follow-up history tracker |
-| `scan.mjs` | Zero-token portal scanner — polls tracked-company ATS APIs (Greenhouse/Ashby/Lever) **and** query-based aggregators (Adzuna/Arbeitnow/JSearch); aggregator keys live in `.env`, zero LLM cost |
-| `usage-ledger.mjs` | Monthly aggregator API-call counter (`data/api-usage.tsv`); guards JSearch's free-tier cap |
+| `scan.mjs` | Zero-token portal scanner — hits Greenhouse/Ashby/Lever APIs directly, zero LLM cost |
 | `check-liveness.mjs` | Job posting liveness checker |
 | `liveness-core.mjs` | Shared liveness logic (expired signals win over generic Apply text) |
 | `reports/` | Evaluation reports (format: `{###}-{company-slug}-{YYYY-MM-DD}.md`). Blocks A-F + G (Posting Legitimacy). Header includes `**Legitimacy:** {tier}`. |
 
 ### First Run — Onboarding (IMPORTANT)
 
-**Before doing ANYTHING else, check if the system is set up.** Run these checks silently every time a session starts:
+**Before doing ANYTHING else, check if the system is set up.** On the first message of each session, run the cold-start check — one deterministic source of truth (this doc and `doctor.mjs` share the same prerequisite list, so they can never drift):
 
-1. Does `cv.md` exist?
-2. Does `config/profile.yml` exist (not just profile.example.yml)?
-3. Does `modes/_profile.md` exist (not just _profile.template.md)?
-4. Does `portals.yml` exist (not just templates/portals.example.yml)?
+```bash
+node doctor.mjs --json
+```
 
-If `modes/_profile.md` is missing, copy from `modes/_profile.template.md` silently. This is the user's customization file — it will never be overwritten by updates.
+Output: `{"onboardingNeeded": <bool>, "missing": [...]}`, where `missing` lists whichever of `cv.md`, `config/profile.yml`, `modes/_profile.md`, `portals.yml` are absent.
 
-**If ANY of these is missing, enter onboarding mode.** Do NOT proceed with evaluations, scans, or any other mode until the basics are in place. Guide the user step by step:
+- If `modes/_profile.md` is in `missing`, copy it silently from `modes/_profile.template.md` (the user's customization file — never overwritten by updates). It's then resolved.
+- **If, after that, `onboardingNeeded` is still true (any of `cv.md` / `config/profile.yml` / `portals.yml` is missing), enter onboarding mode.** Do NOT proceed with evaluations, scans, or any other mode until the basics are in place. Guide the user step by step:
 
 #### Step 1: CV (required)
 If `cv.md` is missing, ask:
@@ -208,7 +207,6 @@ Default modes are in `modes/` (English). Additional language-specific modes are 
 | Asks for company research | `deep` |
 | Preps for interview at specific company | `interview-prep` |
 | Wants to generate CV/PDF | `pdf` |
-| Wants a tailored cover letter | `cover-letter` |
 | Evaluates a course/cert | `training` |
 | Evaluates portfolio project | `project` |
 | Asks about application status | `tracker` |

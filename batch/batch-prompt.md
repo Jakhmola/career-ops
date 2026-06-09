@@ -227,8 +227,8 @@ Donde `{company-slug}` es el nombre de empresa en lowercase, sin espacios, con g
 **Arquetipo:** {detectado}
 **Score:** {X/5}
 **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}
-**URL:** {URL de la oferta original — la URL real y clickeable, NUNCA un path `local:`. Si `{{URL}}` es un path `local:jds/...` (o está vacío), lee la línea `**URL:**` dentro del archivo JD y usa esa URL real. Solo usa el path `local:` si el JD no tiene línea `**URL:**`.}
-**PDF:** {output/cv-candidate-{slug}-{{DATE}}.pdf if score ≥ the resolved `auto_pdf_score_threshold` from Paso 4, else `not generated — run /career-ops pdf {slug} to create on demand`}
+**URL:** {URL de la oferta original}
+**PDF:** {output/cv-candidate-{company-slug}-{{DATE}}.pdf if score ≥ the resolved `auto_pdf_score_threshold` from Paso 4, else `not generated — run /career-ops pdf {company-slug} to create on demand`}
 **Batch ID:** {{ID}}
 
 ---
@@ -306,12 +306,12 @@ next_action: "{one concrete next step}"
 9. Construye competency grid (6-8 keyword phrases)
 10. Inyecta keywords en logros existentes (**NUNCA inventa**)
 11. Genera HTML completo desde template (lee `templates/cv-template.html`)
-12. Construye `{slug}` = `{company-kebab}-{role-kebab}` (empresa Y rol, NUNCA empresa sola — dos roles en la misma empresa se sobrescribirían el PDF). `{role-kebab}` = 2-4 palabras distintivas del título del rol en kebab-case. Ej.: bol.com "Data Scientist – AdAdvice" → `bol-adadvice`; Miro "ML Research Engineer" → `miro-ml-research-engineer`. Escribe HTML a `/tmp/cv-candidate-{slug}.html`
+12. Escribe HTML a `/tmp/cv-candidate-{company-slug}.html`
 13. Ejecuta:
 ```bash
 node generate-pdf.mjs \
-  /tmp/cv-candidate-{slug}.html \
-  output/cv-candidate-{slug}-{{DATE}}.pdf \
+  /tmp/cv-candidate-{company-slug}.html \
+  output/cv-candidate-{company-slug}-{{DATE}}.pdf \
   --format={letter|a4}
 ```
 14. Reporta: ruta PDF, nº páginas, % cobertura keywords

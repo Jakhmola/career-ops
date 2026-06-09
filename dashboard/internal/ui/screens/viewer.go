@@ -10,17 +10,11 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/santifer/career-ops/dashboard/internal/model"
 	"github.com/santifer/career-ops/dashboard/internal/theme"
 )
 
 // ViewerClosedMsg is emitted when the viewer is dismissed.
 type ViewerClosedMsg struct{}
-
-// ViewerMarkAppliedMsg is emitted when the user marks the current job as Applied from the viewer.
-type ViewerMarkAppliedMsg struct {
-	App model.CareerApplication
-}
 
 // ViewerModel implements an integrated file viewer screen.
 type ViewerModel struct {
@@ -31,11 +25,10 @@ type ViewerModel struct {
 	width         int
 	height        int
 	theme         theme.Theme
-	app           model.CareerApplication
 }
 
 // NewViewerModel creates a new file viewer for the given path.
-func NewViewerModel(t theme.Theme, path, title string, app model.CareerApplication, width, height int) ViewerModel {
+func NewViewerModel(t theme.Theme, path, title string, width, height int) ViewerModel {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		content = []byte("Error reading file: " + err.Error())
@@ -52,7 +45,6 @@ func NewViewerModel(t theme.Theme, path, title string, app model.CareerApplicati
 		width:  width,
 		height: height,
 		theme:  t,
-		app:    app,
 	}
 	m.rebuildRender()
 	return m
@@ -93,12 +85,6 @@ func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 		switch msg.String() {
 		case "q", "esc":
 			return m, func() tea.Msg { return ViewerClosedMsg{} }
-
-		case "enter":
-			if strings.ToLower(m.app.Status) == "evaluated" {
-				app := m.app
-				return m, func() tea.Msg { return ViewerMarkAppliedMsg{App: app} }
-			}
 
 		case "down", "j":
 			maxScroll := len(m.renderedLines) - m.bodyHeight()
@@ -632,14 +618,9 @@ func (m ViewerModel) renderFooter() string {
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text)
 	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
 
-	keys := keyStyle.Render("↑↓") + descStyle.Render(" scroll  ") +
-		keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
-		keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
-		keyStyle.Render("Esc") + descStyle.Render(" back")
-
-	if strings.ToLower(m.app.Status) == "evaluated" {
-		keys += "  " + keyStyle.Render("Enter") + descStyle.Render(" → Applied")
-	}
-
-	return style.Render(keys)
+	return style.Render(
+		keyStyle.Render("↑↓") + descStyle.Render(" scroll  ") +
+			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
+			keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
+			keyStyle.Render("Esc") + descStyle.Render(" back"))
 }

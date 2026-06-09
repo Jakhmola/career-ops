@@ -25,9 +25,10 @@
  *   node scan.mjs --dry-run        # preview without writing files
  *   node scan.mjs --company Cohere # scan a single company
  *   node scan.mjs --verify         # Playwright-check each new URL; drop expired postings
+ *   node scan.mjs --verify --headed-fallback  # retry anti-bot-blocked URLs in a headed browser (needs a display)
+ *   node scan.mjs --verify --throttle          # jittered ~5-10s gap between checks (stay under rate limits)
+ *   node scan.mjs --verify --throttle=8000     # custom base gap in ms (waits base..2*base)
  */
-
-import 'dotenv/config'; // loads .env so aggregator providers can read API keys from process.env
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
 import { pathToFileURL, fileURLToPath } from 'url';
@@ -35,8 +36,6 @@ import path from 'path';
 import yaml from 'js-yaml';
 
 import { makeHttpCtx } from './providers/_http.mjs';
-import { jdFilename, renderJd } from './providers/_jd.mjs';
-import { getMonthlyCount, addUsage } from './usage-ledger.mjs';
 
 const parseYaml = yaml.load;
 
@@ -46,7 +45,6 @@ const PORTALS_PATH = process.env.CAREER_OPS_PORTALS || 'portals.yml';
 const SCAN_HISTORY_PATH = 'data/scan-history.tsv';
 const PIPELINE_PATH = 'data/pipeline.md';
 const APPLICATIONS_PATH = 'data/applications.md';
-const JDS_DIR = 'jds';
 const PROVIDERS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'providers');
 
 // Ensure required directories exist (fresh setup)
@@ -123,31 +121,14 @@ function resolveProvider(entry, providers, { skipIds = [] } = {}) {
 
 // ── Title filter ────────────────────────────────────────────────────
 
-export function buildTitleFilter(titleFilter) {
-  // Compile each keyword to a word-boundary regex for alphanumeric/hyphen keywords
-  // (prevents "AI" matching "paid", "ML" matching "AML", etc.).
-  // Keywords with special chars like ".NET" fall back to substring match.
-  // `plural` (negatives only) appends an optional trailing "s" so "Professor"
-  // also drops "Professors", "Manager"→"Managers", "Lead"→"Leads", etc. It is
-  // NOT applied to positives: matching is the strict direction there, so we
-  // don't loosen 2-char tokens like "AI"/"ML" into "AIS"/"MLS". Special-char
-  // keywords (".NET") stay substring and are unaffected.
-  const compile = (k, plural = false) => {
-    const t = k.trim();
-    if (/^[\w\s-]+$/.test(t)) {
-      const esc = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return { re: new RegExp('\\b' + esc + (plural ? 's?' : '') + '\\b', 'i') };
-    }
-    return { sub: t.toLowerCase() };
-  };
-  const hit = (c, title) => c.re ? c.re.test(title) : title.toLowerCase().includes(c.sub);
-
-  const positive = (titleFilter?.positive || []).map(k => compile(k));
-  const negative = (titleFilter?.negative || []).map(k => compile(k, true));
+function buildTitleFilter(titleFilter) {
+  const positive = (titleFilter?.positive || []).map(k => k.toLowerCase());
+  const negative = (titleFilter?.negative || []).map(k => k.toLowerCase());
 
   return (title) => {
-    const hasPositive = positive.length === 0 || positive.some(c => hit(c, title));
-    const hasNegative = negative.some(c => hit(c, title));
+    const lower = title.toLowerCase();
+    const hasPositive = positive.length === 0 || positive.some(k => lower.includes(k));
+    const hasNegative = negative.some(k => lower.includes(k));
     return hasPositive && !hasNegative;
   };
 }
@@ -197,28 +178,6 @@ export function buildLocationFilter(locationFilter) {
 
 // ── Dedup ───────────────────────────────────────────────────────────
 
-// Normalize a company+title pair into a stable dedup key so the SAME role
-// surfaced by different sources collapses to one — notably LinkedIn vs Indeed
-// (the JobSpy scraper hits BOTH), which name the employer differently
-// ("CGI" vs "CGI Nederland", "X" vs "X (IND)") under different URLs. Drops
-// parentheticals, common corporate suffixes, and punctuation. Conservative:
-// the normalized TITLE must still match, so distinct roles at one employer stay
-// separate. Exported for tests.
-const COMPANY_SUFFIXES =
-  /\b(nederland|netherlands|bv|gmbh|inc|incorporated|ltd|limited|llc|nl|se|ag|plc|group|holding|holdings|nv)\b/g;
-
-export function companyRoleKey(company, title) {
-  const norm = (s) => String(s || '')
-    .toLowerCase()
-    .replace(/\(.*?\)/g, ' ')        // drop "(IND)", "(m/f/d)", etc.
-    .replace(/[.'`’]/g, '')          // collapse abbreviations so "b.v." → "bv"
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-  const co = norm(company).replace(COMPANY_SUFFIXES, ' ').replace(/\s+/g, ' ').trim();
-  const ti = norm(title).replace(/\s+/g, ' ').trim();
-  return `${co}::${ti}`;
-}
-
 function loadSeenUrls() {
   const seen = new Set();
 
@@ -256,10 +215,10 @@ function loadSeenCompanyRoles() {
     const text = readFileSync(APPLICATIONS_PATH, 'utf-8');
     // Parse markdown table rows: | # | Date | Company | Role | ...
     for (const match of text.matchAll(/\|[^|]+\|[^|]+\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/g)) {
-      const company = match[1].trim();
-      const role = match[2].trim();
-      if (company && role && company.toLowerCase() !== 'company') {
-        seen.add(companyRoleKey(company, role));
+      const company = match[1].trim().toLowerCase();
+      const role = match[2].trim().toLowerCase();
+      if (company && role && company !== 'company') {
+        seen.add(`${company}::${role}`);
       }
     }
   }
@@ -273,49 +232,26 @@ function appendToPipeline(offers) {
 
   let text = readFileSync(PIPELINE_PATH, 'utf-8');
 
-  // The pipeline line carries `pipelineUrl` when present (e.g. a scraper's
-  // `local:jds/...` ref, so evaluation reads the JD offline instead of hitting a
-  // login wall) and falls back to the canonical URL otherwise. Dedup, liveness
-  // verification, and scan-history all keep `o.url` (the employer URL).
-  const pipelineLine = (o) => `- [ ] ${o.pipelineUrl || o.url} | ${o.company} | ${o.title}`;
-
-  // Support both English ("## Pending") and Spanish ("## Pendientes") markers so
-  // the function works regardless of which language the file was initialised with.
-  // The first marker found wins; the Spanish processed header is also recognised
-  // so the fallback create path picks the right processed-section counterpart.
-  const PENDING_MARKERS = ['## Pending', '## Pendientes'];
-  const PROCESSED_MARKERS = ['## Processed', '## Procesadas'];
-
-  // Find the first existing Pending section.
-  let markerUsed = null;
-  let idx = -1;
-  for (const m of PENDING_MARKERS) {
-    const i = text.indexOf(m);
-    if (i !== -1 && (idx === -1 || i < idx)) {
-      idx = i;
-      markerUsed = m;
-    }
-  }
-
+  // Find "## Pendientes" section and append after it
+  const marker = '## Pendientes';
+  const idx = text.indexOf(marker);
   if (idx === -1) {
-    // No Pending section exists yet — create one before the Processed section
-    // (or at end of file if there is no Processed section either).
-    const newMarker = PENDING_MARKERS[0]; // always create as English
-    let procIdx = -1;
-    for (const m of PROCESSED_MARKERS) {
-      const i = text.indexOf(m);
-      if (i !== -1 && (procIdx === -1 || i < procIdx)) procIdx = i;
-    }
+    // No Pendientes section — append at end before Procesadas
+    const procIdx = text.indexOf('## Procesadas');
     const insertAt = procIdx === -1 ? text.length : procIdx;
-    const block = `\n${newMarker}\n\n` + offers.map(pipelineLine).join('\n') + '\n\n';
+    const block = `\n${marker}\n\n` + offers.map(o =>
+      `- [ ] ${o.url} | ${o.company} | ${o.title}`
+    ).join('\n') + '\n\n';
     text = text.slice(0, insertAt) + block + text.slice(insertAt);
   } else {
-    // Append into the existing Pending section (just before the next ## heading).
-    const afterMarker = idx + markerUsed.length;
+    // Find the end of existing Pendientes content (next ## or end)
+    const afterMarker = idx + marker.length;
     const nextSection = text.indexOf('\n## ', afterMarker);
     const insertAt = nextSection === -1 ? text.length : nextSection;
 
-    const block = '\n' + offers.map(pipelineLine).join('\n') + '\n';
+    const block = '\n' + offers.map(o =>
+      `- [ ] ${o.url} | ${o.company} | ${o.title}`
+    ).join('\n') + '\n';
     text = text.slice(0, insertAt) + block + text.slice(insertAt);
   }
 
@@ -359,13 +295,18 @@ async function parallelFetch(tasks, limit) {
 
 // ── Main ────────────────────────────────────────────────────────────
 
-async function verifyOffers(offers) {
+async function verifyOffers(offers, { headedFallback = false, throttleBaseMs = 0 } = {}) {
   // Dynamic imports keep the default zero-token path free of Playwright startup
   let chromium;
   let checkUrlLiveness;
+  let checkUrlLivenessWithFallback;
+  let createHeadedPageProvider;
+  let newLivenessPage;
+  let jitteredDelayMs;
+  let sleep;
   try {
     ({ chromium } = await import('playwright'));
-    ({ checkUrlLiveness } = await import('./liveness-browser.mjs'));
+    ({ checkUrlLiveness, checkUrlLivenessWithFallback, createHeadedPageProvider, newLivenessPage, jitteredDelayMs, sleep } = await import('./liveness-browser.mjs'));
   } catch (err) {
     throw new Error(
       `--verify requires Playwright with Chromium (run "npx playwright install chromium"): ${err.message}`,
@@ -395,11 +336,17 @@ async function verifyOffers(offers) {
   const dropped = [];
   const invalid = [];
 
+  const headed = headedFallback ? createHeadedPageProvider(chromium) : null;
+  const getHeadedPage = headed ? () => headed.get() : undefined;
+
   try {
-    const page = await browser.newPage();
+    const page = await newLivenessPage(browser);
     // Sequential — project rule: never Playwright in parallel
-    for (const offer of offers) {
-      const { result, code, reason } = await checkUrlLiveness(page, offer.url);
+    for (let i = 0; i < offers.length; i++) {
+      const offer = offers[i];
+      const { result, code, reason } = headed
+        ? await checkUrlLivenessWithFallback(page, offer.url, { getHeadedPage })
+        : await checkUrlLiveness(page, offer.url);
       if (result === 'expired') {
         expired.push({ ...offer, reason });
         console.log(`  ❌ expired   ${offer.company} | ${offer.title} (${reason})`);
@@ -421,8 +368,12 @@ async function verifyOffers(offers) {
         const icon = result === 'active' ? '✅' : '⚠️';
         console.log(`  ${icon} ${result.padEnd(9)} ${offer.company} | ${offer.title}`);
       }
+
+      const wait = i < offers.length - 1 ? jitteredDelayMs(throttleBaseMs) : 0;
+      if (wait) await sleep(wait);
     }
   } finally {
+    if (headed) await headed.close();
     await browser.close();
   }
 
@@ -445,6 +396,15 @@ async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes('--dry-run');
   const verify = args.includes('--verify');
+  // Opt-in: on an anti-bot challenge (e.g. pracuj.pl Cloudflare wall), retry the
+  // URL in a headed browser. Off by default — headed Chromium needs a display, so
+  // scheduled/unattended scans should not rely on it.
+  const headedFallback = args.includes('--headed-fallback');
+  // --throttle or --throttle=<ms>: jittered gap between --verify checks to stay
+  // under rate-based WAF limits (pracuj.pl flags the session after a few rapid
+  // hits). Default base 5000ms. Off by default — most ATS feeds don't need it.
+  const throttleArg = args.find((a) => a === '--throttle' || a.startsWith('--throttle='));
+  const throttleBaseMs = throttleArg ? (Number(throttleArg.split('=')[1]) || 5000) : 0;
   const companyFlag = args.indexOf('--company');
   const filterCompany = companyFlag !== -1 ? args[companyFlag + 1]?.toLowerCase() : null;
 
@@ -470,6 +430,7 @@ async function main() {
   const targets = [];
   let skippedCount = 0;
   const resolveErrors = [];
+  const agentHandoff = [];
   for (const company of companies) {
     if (!company || typeof company !== 'object') continue;
     if (company.enabled === false) continue;
@@ -479,7 +440,17 @@ async function main() {
     }
     if (filterCompany && !company.name.toLowerCase().includes(filterCompany)) continue;
     const resolved = resolveProvider(company, providers);
-    if (!resolved) { skippedCount++; continue; }
+    if (!resolved) {
+      skippedCount++;
+      if (company.scan_method === 'websearch') {
+        agentHandoff.push({
+          company: company.name,
+          method: 'websearch',
+          query: company.scan_query || company.search_query || company.careers_url || '',
+        });
+      }
+      continue;
+    }
     if (resolved.error) { resolveErrors.push({ company: company.name, error: resolved.error }); continue; }
     targets.push({ ...company, _provider: resolved.provider });
   }
@@ -539,7 +510,7 @@ async function main() {
           totalDupes++;
           continue;
         }
-        const key = companyRoleKey(job.company, job.title);
+        const key = `${job.company.toLowerCase()}::${job.title.toLowerCase()}`;
         if (seenCompanyRoles.has(key)) {
           totalDupes++;
           continue;
@@ -556,165 +527,6 @@ async function main() {
 
   await parallelFetch(tasks, CONCURRENCY);
 
-  // 5b. Aggregator phase — query-based sources (Adzuna / Arbeitnow / JSearch).
-  // One query → jobs from many employers. Results feed the SAME title/location
-  // filters and dedup sets as tracked companies, so an aggregator hit and an ATS
-  // hit for the same role collapse to one. Skipped when --company is set (that
-  // flag targets a single tracked company).
-  const apiCallCounts = new Map();
-  const usageMonth = date.slice(0, 7);
-  let aggregatorsPolled = 0;
-  const aggregators =
-    !filterCompany && config.aggregators && typeof config.aggregators === 'object'
-      ? config.aggregators
-      : {};
-
-  const aggregatorTasks = [];
-  for (const [aggId, aggConfig] of Object.entries(aggregators)) {
-    if (!aggConfig || typeof aggConfig !== 'object') continue;
-    if (aggConfig.enabled === false) continue;
-    const provider = providers.get(aggId);
-    if (!provider) {
-      console.error(`⚠️  aggregator "${aggId}" — no provider loaded; skipping`);
-      continue;
-    }
-    // Monthly-cap guard — protects free-tier quotas (e.g. JSearch ~200/mo).
-    const cap = Number(aggConfig.monthly_cap);
-    if (Number.isFinite(cap) && cap > 0) {
-      const used = getMonthlyCount(aggId, usageMonth);
-      if (used >= cap) {
-        console.error(`⚠️  ${aggId}: monthly cap reached (${used}/${cap}) — skipping this scan`);
-        continue;
-      }
-    }
-    aggregatorsPolled++;
-    const descriptor = {
-      name: aggId,
-      positive: config.title_filter?.positive || [],
-      location: {
-        country: aggConfig.country,
-        where: aggConfig.where,
-        allow: config.location_filter?.allow || [],
-        block: config.location_filter?.block || [],
-        always_allow: config.location_filter?.always_allow || [],
-      },
-      config: aggConfig,
-    };
-    aggregatorTasks.push(async () => {
-      const ctx = makeHttpCtx(apiCallCounts);
-      try {
-        const jobs = await provider.fetch(descriptor, ctx);
-        if (!Array.isArray(jobs)) {
-          throw new Error(`${aggId}: fetch() did not return an array`);
-        }
-        totalFound += jobs.length;
-        for (const job of jobs) {
-          if (!job || typeof job.url !== 'string' || !job.url) continue;
-          if (!titleFilter(job.title || '')) { totalFilteredTitle++; continue; }
-          if (!locationFilter(job.location)) { totalFilteredLocation++; continue; }
-          if (seenUrls.has(job.url)) { totalDupes++; continue; }
-          const key = companyRoleKey(job.company, job.title);
-          if (seenCompanyRoles.has(key)) { totalDupes++; continue; }
-          seenUrls.add(job.url);
-          seenCompanyRoles.add(key);
-          newOffers.push({ ...job, source: aggId });
-        }
-      } catch (err) {
-        errors.push({ company: `aggregator:${aggId}`, error: err.message });
-      }
-    });
-  }
-  if (aggregatorTasks.length > 0) {
-    await parallelFetch(aggregatorTasks, CONCURRENCY);
-  }
-
-  // 5c. Scraper phase — query-based sources that SCRAPE boards (LinkedIn/Indeed/
-  // Google via JobSpy) instead of calling a vendor API (docs/adr/0002). Siblings
-  // of the aggregators: results feed the SAME title/location filters and dedup
-  // sets, so a scraped hit and an ATS/aggregator hit for the same role collapse
-  // to one. A scraper carries its OWN search_terms (kept separate from
-  // title_filter.positive — broad single tokens belong in the filter, not the
-  // search). No quota/usage ledger (scraping is free). Skipped when --company is
-  // set. dryRun is threaded so providers can skip side-effects (e.g. writing JDs).
-  let scrapersPolled = 0;
-  const scrapers =
-    !filterCompany && config.scrapers && typeof config.scrapers === 'object'
-      ? config.scrapers
-      : {};
-
-  const scraperTasks = [];
-  const jdUsedNames = new Set(); // de-dup JD filenames across all scraped offers this scan
-  for (const [scrId, scrConfig] of Object.entries(scrapers)) {
-    if (!scrConfig || typeof scrConfig !== 'object') continue;
-    if (scrConfig.enabled === false) continue;
-    const provider = providers.get(scrId);
-    if (!provider) {
-      console.error(`⚠️  scraper "${scrId}" — no provider loaded; skipping`);
-      continue;
-    }
-    scrapersPolled++;
-    const descriptor = {
-      name: scrId,
-      dryRun,
-      location: {
-        country: scrConfig.country_indeed,
-        where: scrConfig.location,
-        allow: config.location_filter?.allow || [],
-        block: config.location_filter?.block || [],
-        always_allow: config.location_filter?.always_allow || [],
-      },
-      config: scrConfig,
-    };
-    scraperTasks.push(async () => {
-      // No counts map: scrapers have no metered quota, so recordCall is an inert
-      // no-op and the API-usage ledger stays aggregator-only.
-      const ctx = makeHttpCtx();
-      try {
-        const jobs = await provider.fetch(descriptor, ctx);
-        if (!Array.isArray(jobs)) {
-          throw new Error(`${scrId}: fetch() did not return an array`);
-        }
-        totalFound += jobs.length;
-        for (const job of jobs) {
-          if (!job || typeof job.url !== 'string' || !job.url) continue;
-          if (!titleFilter(job.title || '')) { totalFilteredTitle++; continue; }
-          if (!locationFilter(job.location)) { totalFilteredLocation++; continue; }
-          if (seenUrls.has(job.url)) { totalDupes++; continue; }
-          const key = companyRoleKey(job.company, job.title);
-          if (seenCompanyRoles.has(key)) { totalDupes++; continue; }
-          seenUrls.add(job.url);
-          seenCompanyRoles.add(key);
-          // `board` (job.site, e.g. linkedin/indeed) rides along so the summary
-          // can break a scraper's contribution down per board.
-          const offer = { title: job.title, url: job.url, company: job.company, location: job.location, source: scrId, board: job.site };
-          // Persist the captured JD (scrapers attach `description`) for offers we
-          // KEEP, then reference it offline via local:jds/. Skipped on dry-run to
-          // honor the no-write contract. The canonical url stays on the offer for
-          // dedup/verify/scan-history; only pipeline.md uses the local ref.
-          if (!dryRun && job.description) {
-            const file = jdFilename(job, jdUsedNames);
-            try {
-              if (!existsSync(JDS_DIR)) mkdirSync(JDS_DIR, { recursive: true });
-              writeFileSync(path.join(JDS_DIR, file), renderJd(job), 'utf-8');
-              offer.pipelineUrl = `local:jds/${file}`;
-            } catch (err) {
-              console.error(`⚠️  ${scrId}: could not write jds/${file} — ${err.message}`);
-            }
-          }
-          newOffers.push(offer);
-        }
-      } catch (err) {
-        errors.push({ company: `scraper:${scrId}`, error: err.message });
-      }
-    });
-  }
-  // Scrapers run sequentially against the same home IP inside each provider;
-  // run the providers themselves sequentially too (concurrency 1) so two
-  // scrapers can't hammer overlapping boards at once.
-  if (scraperTasks.length > 0) {
-    await parallelFetch(scraperTasks, 1);
-  }
-
   // 5.5. Optional liveness verification — drop expired and guard-rejected postings
   let verifiedOffers = newOffers;
   let expiredOffers = [];
@@ -722,7 +534,7 @@ async function main() {
   let invalidOffers = [];
   if (verify && newOffers.length > 0) {
     console.log(`\nVerifying liveness of ${newOffers.length} new offer(s) with Playwright (sequential)...`);
-    const result = await verifyOffers(newOffers);
+    const result = await verifyOffers(newOffers, { headedFallback, throttleBaseMs });
     verifiedOffers = result.verified;
     expiredOffers = result.expired;
     droppedOffers = result.dropped;
@@ -758,23 +570,11 @@ async function main() {
     }
   }
 
-  // 6b. Flush aggregator API usage into the monthly ledger (skip on dry-run —
-  // dry-run makes no file writes, matching tracked-company behavior).
-  if (!dryRun && apiCallCounts.size > 0) {
-    try {
-      addUsage(apiCallCounts, usageMonth);
-    } catch (err) {
-      console.error(`⚠️  could not update API usage ledger: ${err.message}`);
-    }
-  }
-
   // 7. Print summary
   console.log(`\n${'━'.repeat(45)}`);
   console.log(`Portal Scan — ${date}`);
   console.log(`${'━'.repeat(45)}`);
   console.log(`Companies scanned:     ${targets.length}`);
-  if (aggregatorsPolled > 0) console.log(`Aggregators polled:    ${aggregatorsPolled}`);
-  if (scrapersPolled > 0) console.log(`Scrapers polled:       ${scrapersPolled}`);
   console.log(`Total jobs found:      ${totalFound}`);
   console.log(`Filtered by title:     ${totalFilteredTitle} removed`);
   console.log(`Filtered by location:  ${totalFilteredLocation} removed`);
@@ -784,40 +584,17 @@ async function main() {
     console.log(`No apply control:      ${droppedOffers.length} dropped`);
     console.log(`Invalid (guarded):     ${invalidOffers.length} dropped`);
   }
-  if (apiCallCounts.size > 0) {
-    const parts = [...apiCallCounts.entries()].map(([s, n]) => `${s} ${n}`).join(', ');
-    console.log(`Aggregator API calls:  ${parts}`);
-  }
   console.log(`New offers added:      ${verifiedOffers.length}`);
 
-  // Per-source breakdown of added offers (tracked-company providers + aggregators
-  // + scrapers). Scraper sources carry a `board` (e.g. linkedin/indeed), so their
-  // line gets an indented per-board sub-tree.
-  if (verifiedOffers.length > 0) {
-    const bySource = new Map();
-    const byBoard = new Map(); // source -> Map(board -> count)
-    for (const o of verifiedOffers) {
-      const s = o.source || 'unknown';
-      bySource.set(s, (bySource.get(s) || 0) + 1);
-      if (o.board) {
-        if (!byBoard.has(s)) byBoard.set(s, new Map());
-        const bm = byBoard.get(s);
-        bm.set(o.board, (bm.get(o.board) || 0) + 1);
-      }
+  if (agentHandoff.length > 0) {
+    console.log(`Agent/WebSearch handoff: ${agentHandoff.length} compan${agentHandoff.length === 1 ? 'y' : 'ies'} not handled by zero-token providers`);
+    for (const item of agentHandoff.slice(0, 25)) {
+      const hint = item.query ? ` — ${item.query}` : '';
+      console.log(`  • ${item.company} (${item.method})${hint}`);
     }
-    const sources = [...bySource.entries()].sort((a, b) => b[1] - a[1]);
-    sources.forEach(([s, n], i) => {
-      const last = i === sources.length - 1;
-      console.log(`  ${last ? '└─' : '├─'} ${s.padEnd(16)} ${n}`);
-      const boards = byBoard.get(s);
-      if (boards) {
-        const cont = last ? '   ' : '│  ';
-        const entries = [...boards.entries()].sort((a, b) => b[1] - a[1]);
-        entries.forEach(([b, bn], j) => {
-          console.log(`  ${cont} ${j === entries.length - 1 ? '└─' : '├─'} ${b.padEnd(13)} ${bn}`);
-        });
-      }
-    });
+    if (agentHandoff.length > 25) {
+      console.log(`  … ${agentHandoff.length - 25} more omitted; narrow with --company or inspect portals.yml`);
+    }
   }
 
   if (errors.length > 0) {

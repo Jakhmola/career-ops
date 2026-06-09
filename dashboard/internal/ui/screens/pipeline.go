@@ -22,7 +22,6 @@ type PipelineOpenReportMsg struct {
 	Path   string
 	Title  string
 	JobURL string
-	App    model.CareerApplication
 }
 
 // PipelineOpenURLMsg is emitted when a job URL should be opened in browser.
@@ -337,7 +336,7 @@ func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 			title := fmt.Sprintf("%s — %s", app.Company, app.Role)
 			jobURL := app.JobURL
 			return m, func() tea.Msg {
-				return PipelineOpenReportMsg{Path: fullPath, Title: title, JobURL: jobURL, App: app}
+				return PipelineOpenReportMsg{Path: fullPath, Title: title, JobURL: jobURL}
 			}
 		}
 

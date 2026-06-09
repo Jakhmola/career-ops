@@ -39,18 +39,10 @@ export async function fetchText(url, opts = {}) {
   return await res.text();
 }
 
-// makeHttpCtx builds the ctx handed to provider.fetch(). Pass an optional
-// `counts` Map to enable ctx.recordCall(source, n) — aggregators call it once
-// per HTTP request so scan.mjs can flush the totals into the monthly usage
-// ledger. With no Map (the default, e.g. per-company providers and tests),
-// recordCall is a harmless no-op so providers imported in isolation don't break.
-export function makeHttpCtx(counts = null) {
+export function makeHttpCtx() {
   return {
     transport: 'http',
     fetchJson,
     fetchText,
-    recordCall(source, n = 1) {
-      if (counts && source) counts.set(source, (counts.get(source) || 0) + n);
-    },
   };
 }
