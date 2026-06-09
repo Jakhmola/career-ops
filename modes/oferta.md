@@ -154,13 +154,15 @@ Save full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 - `{company-slug}` = company name in lowercase, without spaces (use hyphens)
 - `{YYYY-MM-DD}` = current date
 
+**URL field — `local:` offers:** When the offer came from a `local:jds/{file}.md` source (scraper/aggregator with no public web URL — see `modes/scan.md` "URLs privadas"), the JD file stores the real apply URL on its `**URL:**` line. Put **that** URL in the report header, NOT the `local:jds/...` path. A `local:` path in the header means the candidate has no clickable link to apply with. Only fall back to the `local:` path if the JD file genuinely has no `**URL:**` line.
+
 **Report format:**
 
 ```markdown
 # Evaluation: {Company} — {Role}
 
 **Date:** {YYYY-MM-DD}
-**URL:**
+**URL:** {the real, clickable apply URL — NOT a `local:` path}
 **Archetype:** {detected}
 **Score:** {X/5}
 **Legitimacy:** {High Confidence | Proceed with Caution | Suspicious}

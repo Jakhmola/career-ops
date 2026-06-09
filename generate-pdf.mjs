@@ -65,6 +65,10 @@ function normalizeTextForATS(html) {
     let t = text;
     t = t.replace(/\u2014/g, () => { bump('em-dash', 1); return '-'; });
     t = t.replace(/\u2013/g, () => { bump('en-dash', 1); return '-'; });
+    // Same dashes written as HTML entities (templates/generated HTML use &mdash;/&ndash;).
+    // The raw-char passes above don't match the literal entity strings, so handle them too.
+    t = t.replace(/&mdash;|&#8212;|&#x2014;/gi, () => { bump('em-dash', 1); return '-'; });
+    t = t.replace(/&ndash;|&#8211;|&#x2013;/gi, () => { bump('en-dash', 1); return '-'; });
     t = t.replace(/[\u201C\u201D\u201E\u201F]/g, () => { bump('smart-double-quote', 1); return '"'; });
     t = t.replace(/[\u2018\u2019\u201A\u201B]/g, () => { bump('smart-single-quote', 1); return "'"; });
     t = t.replace(/\u2026/g, () => { bump('ellipsis', 1); return '...'; });
@@ -84,8 +88,49 @@ function normalizeTextForATS(html) {
     // wrong for half of users \u2014 better to leave the glyph than emit bad data.
     t = t.replace(/\u20AC/g, () => { bump('euro', 1); return 'EUR '; });
     t = t.replace(/\u00A3/g, () => { bump('pound', 1); return 'GBP '; });
+    // Greek letters / math operators used as variables in ML/stats prose (e.g. Cohen's
+    // kappa, >=85%). They're outside the Latin static-font subset, so they trigger a
+    // fallback-font glyph (a stray LiberationSans in the PDF) and can garble extraction.
+    // Spell out / ASCII-ify; handle both raw chars and HTML entities. Deliberately narrow
+    // to unambiguous cases (mu is intentionally NOT mapped \u2014 it would mangle "50\u00B5s").
+    t = t.replace(/\u03BA|&kappa;/g, () => { bump('greek-kappa', 1); return 'kappa'; });
+    t = t.replace(/\u2265|&ge;|&#8805;/g, () => { bump('ge', 1); return '>='; });
+    t = t.replace(/\u2264|&le;|&#8804;/g, () => { bump('le', 1); return '<='; });
     return t;
   }
+}
+
+/**
+ * Inline self-hosted @font-face sources (url('./fonts/X')) as base64 data: URIs.
+ *
+ * Why base64 and not file:// URLs: when the page is created via page.setContent(),
+ * Chromium treats cross-directory file:// font fetches as opaque-origin subresources
+ * and silently blocks them \u2014 the document falls back to a system font (Liberation/Arial).
+ * Inlined data: URIs carry no origin, so they always load.
+ *
+ * Pair this with STATIC (single-weight) TTFs in fonts/, NOT variable woff2: Chromium
+ * cannot cleanly subset a variable font into the PDF and falls back to Type 3 glyph
+ * procedures, which corrupts ATS text extraction (spurious spaces inside words, e.g.
+ * "j4khmola @gma il.com"). Static TTFs embed as CID TrueType and extract cleanly.
+ */
+async function inlineFonts(html, fontsDir) {
+  const mime = { woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf', otf: 'font/otf' };
+  const refs = new Set();
+  for (const m of html.matchAll(/url\(['"]?\.\/fonts\/([^'")]+)['"]?\)/g)) refs.add(m[1]);
+  for (const file of refs) {
+    const ext = file.split('.').pop().toLowerCase();
+    try {
+      const b64 = (await readFile(resolve(fontsDir, file))).toString('base64');
+      const re = new RegExp(
+        `url\\(['"]?\\.\\/fonts\\/${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]?\\)`,
+        'g'
+      );
+      html = html.replace(re, `url(data:${mime[ext] || 'font/ttf'};base64,${b64})`);
+    } catch {
+      console.warn(`\u26A0\uFE0F  font not found, leaving reference as-is: ${file}`);
+    }
+  }
+  return html;
 }
 
 async function generatePDF() {
@@ -126,20 +171,9 @@ async function generatePDF() {
   console.log(`📁 Output: ${outputPath}`);
   console.log(`📏 Format: ${format.toUpperCase()}`);
 
-  // Read HTML to inject font paths as absolute file:// URLs
+  // Read HTML and inline self-hosted fonts as base64 data: URIs (see inlineFonts).
   let html = await readFile(inputPath, 'utf-8');
-
-  // Resolve font paths relative to career-ops/fonts/
-  const fontsDir = resolve(__dirname, 'fonts');
-  html = html.replace(
-    /url\(['"]?\.\/fonts\//g,
-    `url('file://${fontsDir}/`
-  );
-  // Close any unclosed quotes from the replacement (handles all font formats)
-  html = html.replace(
-    /file:\/\/([^'")]+)\.(woff2?|ttf|otf)['"]?\)/g,
-    `file://$1.$2')`
-  );
+  html = await inlineFonts(html, resolve(__dirname, 'fonts'));
 
   // Normalize text for ATS compatibility (issue #1)
   const normalized = normalizeTextForATS(html);
