@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="{{LANG}}">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{{NAME}} — Cover Letter</title>
+        <style>
+            /* Static single-weight TTFs (instanced from the variable fonts). generate-pdf.mjs
+               inlines these as base64; static TTF embeds as CID TrueType and stays ATS-extractable
+               (variable woff2 falls back to Type 3 and corrupts text extraction). */
+            @font-face { font-family: 'Space Grotesk'; src: url('./fonts/sg-600.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: block; }
+            @font-face { font-family: 'Space Grotesk'; src: url('./fonts/sg-700.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: block; }
+            @font-face { font-family: 'DM Sans'; src: url('./fonts/dm-400.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: block; }
+            @font-face { font-family: 'DM Sans'; src: url('./fonts/dm-500.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: block; }
+            @font-face { font-family: 'DM Sans'; src: url('./fonts/dm-600.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: block; }
+
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+
+            html {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+
+            body {
+              font-family: 'DM Sans', sans-serif;
+              font-size: 13.5px;
+              line-height: 1.55;
+              color: #1a1a2e;
+              background: #ffffff;
+              padding: 0;
+              margin: 0;
+            }
+
+            .page {
+              width: 100%;
+              max-width: {{PAGE_WIDTH}};
+              margin: 0 auto;
+              padding: 2px 0;
+            }
+
+            /* === HEADER (matches CV) === */
+            .header {
+              margin-bottom: 20px;
+            }
+
+            .header h1 {
+              font-family: 'Space Grotesk', sans-serif;
+              font-size: 28px;
+              font-weight: 700;
+              color: #1a1a2e;
+              letter-spacing: -0.02em;
+              margin-bottom: 6px;
+              line-height: 1.1;
+            }
+
+            .header-gradient {
+              height: 2px;
+              background: linear-gradient(to right, hsl(187, 74%, 32%), hsl(270, 70%, 45%));
+              border-radius: 1px;
+              margin-bottom: 10px;
+            }
+
+            .contact-row {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px 14px;
+              font-family: 'DM Sans', sans-serif;
+              font-size: 11.5px;
+              line-height: 1.4;
+              color: #555;
+            }
+
+            .contact-row a {
+              color: #555;
+              text-decoration: none;
+            }
+
+            .contact-row .separator {
+              color: #ccc;
+            }
+
+            /* Links must never break across lines */
+            a {
+              white-space: nowrap;
+            }
+
+            /* === LETTER BODY === */
+            .meta {
+              font-size: 11.5px;
+              color: #777;
+              margin-bottom: 18px;
+            }
+
+            .recipient {
+              font-size: 13px;
+              color: #333;
+              margin-bottom: 18px;
+              line-height: 1.5;
+            }
+
+            .recipient .company {
+              font-family: 'Space Grotesk', sans-serif;
+              font-weight: 600;
+              color: hsl(270, 70%, 45%);
+            }
+
+            .greeting {
+              font-size: 13px;
+              color: #1a1a2e;
+              margin-bottom: 12px;
+            }
+
+            .letter-body p {
+              font-size: 13.5px;
+              line-height: 1.6;
+              color: #2f2f2f;
+              margin-bottom: 12px;
+            }
+
+            .signoff {
+              font-size: 13px;
+              color: #1a1a2e;
+              margin-top: 18px;
+              margin-bottom: 8px;
+            }
+
+            .signature {
+              font-family: 'Space Grotesk', sans-serif;
+              font-size: 13px;
+              font-weight: 500;
+              color: #1a1a2e;
+            }
+
+            @media print {
+              body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .page { padding: 0; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+            <!-- HEADER (identical to CV for a consistent application packet) -->
+            <div class="header">
+                <h1>{{NAME}}</h1>
+                <div class="header-gradient"></div>
+                <div class="contact-row">
+                    <span>{{PHONE}}</span>
+                    <span class="separator">|</span>
+                    <span>{{EMAIL}}</span>
+                    <span class="separator">|</span>
+                    <a href="{{LINKEDIN_URL}}">{{LINKEDIN_DISPLAY}}</a>
+                    <span class="separator">|</span>
+                    <a href="{{PORTFOLIO_URL}}">{{PORTFOLIO_DISPLAY}}</a>
+                    <span class="separator">|</span>
+                    <span>{{LOCATION}}</span>
+                    {{PERMIT_STATUS}}
+                </div>
+            </div>
+
+            <!-- DATE -->
+            <div class="meta">{{DATE}}</div>
+
+            <!-- RECIPIENT -->
+            <div class="recipient">{{RECIPIENT}}</div>
+
+            <!-- GREETING -->
+            <div class="greeting">{{GREETING}}</div>
+
+            <!-- BODY: 3 short paragraphs -->
+            <div class="letter-body">{{BODY}}</div>
+
+            <!-- SIGN-OFF -->
+            <div class="signoff">{{SIGNOFF}}</div>
+            <div class="signature">{{SIGNATURE_NAME}}</div>
+        </div>
+    </body>
+</html>

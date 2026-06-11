@@ -133,6 +133,90 @@ async function inlineFonts(html, fontsDir) {
   return html;
 }
 
+const SECTION_ALIASES = new Map([
+  ['summary', 'summary'],
+  ['professional summary', 'summary'],
+  ['competencies', 'competencies'],
+  ['core competencies', 'competencies'],
+  ['experience', 'experience'],
+  ['work experience', 'experience'],
+  ['professional experience', 'experience'],
+  ['projects', 'projects'],
+  ['selected projects', 'projects'],
+  ['personal projects', 'projects'],
+  ['education', 'education'],
+  ['education & certifications', 'education'],
+  ['certifications', 'certifications'],
+  ['skills', 'skills'],
+  ['technical skills', 'skills'],
+]);
+
+function normalizeSectionTitle(text) {
+  return text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\{\{[^}]+\}\}/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/[*_`~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function sectionKey(text) {
+  const normalized = normalizeSectionTitle(text);
+  return SECTION_ALIASES.get(normalized) ?? normalized;
+}
+
+function extractRenderedSectionOrder(html) {
+  const titleMatches = [...html.matchAll(/class=["'][^"']*\bsection-title\b[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi)];
+  const sections = [];
+
+  for (const match of titleMatches) {
+    const text = normalizeSectionTitle(match[1]);
+    if (!text) continue;
+    sections.push({ key: sectionKey(text), title: text });
+  }
+
+  return sections;
+}
+
+function extractSourceSectionOrder(markdown) {
+  const sections = [];
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (!heading) continue;
+    const text = normalizeSectionTitle(heading[2]);
+    if (!text) continue;
+    sections.push({ key: sectionKey(text), title: text });
+  }
+
+  return sections;
+}
+
+function validateCvSectionOrder(html, cvMarkdown) {
+  const rendered = extractRenderedSectionOrder(html);
+  const source = extractSourceSectionOrder(cvMarkdown);
+  if (rendered.length < 2 || source.length < 2) return;
+
+  const sourcePositions = new Map(source.map((section, index) => [section.key, index]));
+  const renderedComparable = rendered.filter(section => sourcePositions.has(section.key));
+  if (renderedComparable.length < 2) return;
+
+  for (let i = 1; i < renderedComparable.length; i++) {
+    const previous = renderedComparable[i - 1];
+    const current = renderedComparable[i];
+    if (sourcePositions.get(current.key) < sourcePositions.get(previous.key)) {
+      const renderedOrder = renderedComparable.map(section => section.title).join(' -> ');
+      const sourceOrder = source
+        .filter(section => renderedComparable.some(renderedSection => renderedSection.key === section.key))
+        .map(section => section.title)
+        .join(' -> ');
+      throw new Error(`CV section order diverges from cv.md: rendered ${renderedOrder}; cv.md ${sourceOrder}`);
+    }
+  }
+}
+
 async function generatePDF() {
   const args = process.argv.slice(2);
 
@@ -173,6 +257,31 @@ async function generatePDF() {
 
   // Read HTML and inline self-hosted fonts as base64 data: URIs (see inlineFonts).
   let html = await readFile(inputPath, 'utf-8');
+
+  // Validate CV section order against cv.md (#817). No-op for cover letters: they lack
+  // >=2 matching CV section titles, so validateCvSectionOrder returns early.
+  let cvMarkdown = '';
+  try {
+    cvMarkdown = await readFile(resolve(__dirname, 'cv.md'), 'utf-8');
+  } catch (err) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
+  // Non-fatal here: this user's `pdf` mode intentionally reorders CV sections for the
+  // 6-second recruiter scan (Summary -> Competencies -> Experience -> Projects ->
+  // Education -> Skills, per modes/pdf.md and modes/_profile.md), which legitimately
+  // diverges from cv.md's own section order. Upstream (#817) hard-throws on divergence;
+  // we downgrade it to a hint so the deliberate reordering is never blocked.
+  try {
+    validateCvSectionOrder(html, cvMarkdown);
+  } catch (err) {
+    console.warn(`⚠️  ${err.message}`);
+    console.warn('   (Expected when pdf mode reorders sections for the recruiter scan — continuing.)');
+  }
+
+  // Inline self-hosted fonts as base64 data: URIs (see inlineFonts). Deliberately kept
+  // over upstream's file:// font replacement: Chromium silently blocks cross-directory
+  // file:// font fetches under page.setContent() and falls back to a system font, which
+  // corrupts ATS text extraction. Base64 data: URIs carry no origin, so they always load.
   html = await inlineFonts(html, resolve(__dirname, 'fonts'));
 
   // Normalize text for ATS compatibility (issue #1)
@@ -184,14 +293,31 @@ async function generatePDF() {
     console.log(`🧹 ATS normalization: ${totalReplacements} replacements (${breakdown})`);
   }
 
+  return renderHtmlToPdf(html, outputPath, { format, baseDir: dirname(inputPath) });
+}
+
+/**
+ * Render an HTML string to a PDF file via headless Chromium.
+ *
+ * @param {string} html - Full HTML document to render.
+ * @param {string} outputPath - Absolute path to write the PDF to.
+ * @param {{format?: 'a4'|'letter', baseDir?: string}} [opts]
+ * @returns {Promise<{outputPath: string, pageCount: number, size: number}>}
+ */
+export async function renderHtmlToPdf(html, outputPath, opts = {}) {
+  const format = opts.format || 'a4';
+  const baseDir = opts.baseDir || process.cwd();
+
+  mkdirSync(dirname(outputPath), { recursive: true });
+
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
 
     // Set content with file base URL for any relative resources
     await page.setContent(html, {
-      waitUntil: 'networkidle',
-      baseURL: `file://${dirname(inputPath)}/`,
+      waitUntil: 'load',
+      baseURL: `file://${baseDir}/`,
     });
 
     // Wait for fonts to load
@@ -228,7 +354,12 @@ async function generatePDF() {
   }
 }
 
-generatePDF().catch((err) => {
-  console.error('❌ PDF generation failed:', err.message);
-  process.exit(1);
-});
+const isMain = process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`;
+if (isMain) {
+  generatePDF().catch((err) => {
+    console.error('❌ PDF generation failed:', err.message);
+    process.exit(1);
+  });
+}
+
+export { normalizeTextForATS };

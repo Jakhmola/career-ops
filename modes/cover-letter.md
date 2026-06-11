@@ -15,7 +15,7 @@ Mirror of `pdf` mode, for the cover letter. Same template-fill → `generate-pdf
    - **P2 — One proof story (3-4 sentences).** Tell the single mapped proof point as a short narrative: the problem/constraint you faced → the key decision you made → the outcome. Lead with the project the role most needs (honor the flagship preference in `modes/_profile.md` when relevant). Use **at most 2-3 quantified results in the ENTIRE letter** — pick the ones that matter to *this* role and drop the rest. One supporting sentence for a second need is fine. Expand on one achievement; do NOT list achievements. End with a sentence tying the *instinct* behind the story to their work. If there's a real domain/seniority gap, name it once and frame it as transferable — not as an apology. **Anchor the story on your role and its scope, not the company name** — the candidate's past employers usually aren't well-known, so "At {Company}" adds no signal; open with the position instead (e.g. "As the sole AI engineer on a consumer chat product, I…").
    - **P3 — Close (2-3 sentences).** A forward line about *their* problem (not "my background could contribute to…"), then the availability + visa one-liner from `_profile.md` Location Policy. Warm and specific, never desperate.
 8. Read `name` from `config/profile.yml` → normalize to kebab-case lowercase → `{candidate}`. Build `{slug}` = `{company-kebab}-{role-kebab}` exactly as in `modes/pdf.md` step 14 (company AND role, never company alone). If a CV was generated for this same application, reuse its identical `{slug}` so the CV + cover letter stay paired and neither overwrites a sibling role at the same company.
-9. Fill the template (`templates/cover-letter-template.html`) → write HTML to `/tmp/cover-letter-{candidate}-{slug}.html`.
+9. Fill the template (`templates/cover-letter-local.html`) → write HTML to `/tmp/cover-letter-{candidate}-{slug}.html`. (This is the local 3-paragraph `{{BODY}}` template. `templates/cover-letter-template.html` is the upstream *structured* template used by `modes/cover.md` + `generate-cover-letter.mjs` — a different placeholder scheme; do not cross them.)
 10. Execute: `node generate-pdf.mjs /tmp/cover-letter-{candidate}-{slug}.html output/cl-{candidate}-{slug}-{YYYY-MM-DD}.pdf --format={letter|a4}`
     - **Output lives flat in `output/` with the `cl-` prefix** (paired with the CV's `output/cv-{candidate}-{slug}-…` file) — NOT in an `output/cover-letters/` subfolder and NOT with a `cover-letter-` prefix.
 11. Report: PDF path, page count (should be 1).
@@ -52,7 +52,7 @@ The weak version has ~10 numbers and reads like a spec sheet. The strong version
 
 ## Template placeholders
 
-Use `templates/cover-letter-template.html`. Replace the `{{...}}` placeholders:
+Use `templates/cover-letter-local.html`. Replace the `{{...}}` placeholders:
 
 | Placeholder | Content |
 |-------------|---------|
