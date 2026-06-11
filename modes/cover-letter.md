@@ -16,7 +16,8 @@ Mirror of `pdf` mode, for the cover letter. Same template-fill → `generate-pdf
    - **P3 — Close (2-3 sentences).** A forward line about *their* problem (not "my background could contribute to…"), then the availability + visa one-liner from `_profile.md` Location Policy. Warm and specific, never desperate.
 8. Read `name` from `config/profile.yml` → normalize to kebab-case lowercase → `{candidate}`. Build `{slug}` = `{company-kebab}-{role-kebab}` exactly as in `modes/pdf.md` step 14 (company AND role, never company alone). If a CV was generated for this same application, reuse its identical `{slug}` so the CV + cover letter stay paired and neither overwrites a sibling role at the same company.
 9. Fill the template (`templates/cover-letter-template.html`) → write HTML to `/tmp/cover-letter-{candidate}-{slug}.html`.
-10. Execute: `node generate-pdf.mjs /tmp/cover-letter-{candidate}-{slug}.html output/cover-letters/cover-letter-{candidate}-{slug}-{YYYY-MM-DD}.pdf --format={letter|a4}`
+10. Execute: `node generate-pdf.mjs /tmp/cover-letter-{candidate}-{slug}.html output/cl-{candidate}-{slug}-{YYYY-MM-DD}.pdf --format={letter|a4}`
+    - **Output lives flat in `output/` with the `cl-` prefix** (paired with the CV's `output/cv-{candidate}-{slug}-…` file) — NOT in an `output/cover-letters/` subfolder and NOT with a `cover-letter-` prefix.
 11. Report: PDF path, page count (should be 1).
 
 ## Tone & length rules
