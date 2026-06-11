@@ -283,7 +283,10 @@ function loadSeenCompanyRoles() {
       const company = segs[0];
       // Title may carry inline annotations after the role name — strip them.
       const title = (segs[1] || '').split(' · ')[0].split(' — ')[0].trim();
-      if (company && title) seen.add(companyRoleKey(company, title));
+      // Allow EMPTY company: some aggregator rows carry no employer name, and
+      // companyRoleKey('') on the incoming side produces the same '::title'
+      // key — requiring a company here let those rows re-enter every scan.
+      if (title) seen.add(companyRoleKey(company || '', title));
     }
   }
 
