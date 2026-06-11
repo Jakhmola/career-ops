@@ -263,6 +263,30 @@ function loadSeenCompanyRoles() {
       }
     }
   }
+
+  // pipeline.md checkbox rows — covers offers already triaged but not (yet) in
+  // the tracker. Critical for aggregators like Careerjet that mint a FRESH
+  // tracking URL for the same posting on every scan: URL dedup misses them, so
+  // without this the same junk re-enters the pipeline every cycle.
+  // Row shapes handled:
+  //   - [x] <url> | Company | Title | <verdict…>
+  //   - [x] #123 | <url-or-local:> | Company | Title | 3.4/5 | PDF ❌
+  //   - [ ] local:jds/x.md | Company | Title · annotations — EVAL
+  if (existsSync(PIPELINE_PATH)) {
+    const text = readFileSync(PIPELINE_PATH, 'utf-8');
+    for (const line of text.split('\n')) {
+      const m = line.match(/^- \[[ x!]\] (.+)$/);
+      if (!m) continue;
+      const segs = m[1].split(' | ').map(s => s.trim());
+      if (/^#\d+$/.test(segs[0])) segs.shift();                     // optional #num
+      if (/^(https?:\/\/|local:|www\.)/.test(segs[0] || '')) segs.shift(); // url/local ref
+      const company = segs[0];
+      // Title may carry inline annotations after the role name — strip them.
+      const title = (segs[1] || '').split(' · ')[0].split(' — ')[0].trim();
+      if (company && title) seen.add(companyRoleKey(company, title));
+    }
+  }
+
   return seen;
 }
 
