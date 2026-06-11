@@ -287,6 +287,15 @@ function loadSeenCompanyRoles() {
       // companyRoleKey('') on the incoming side produces the same '::title'
       // key — requiring a company here let those rows re-enter every scan.
       if (title) seen.add(companyRoleKey(company || '', title));
+      // Pipe-laden titles ("AI | Genai Engineer | Amsterdam | 100k") get split
+      // into separate segments above, so segs[1] alone under-keys them. Also
+      // register the full remaining tail (up to any verdict/score annotation
+      // we append when triaging) as an alternate title key.
+      const tailEnd = segs.findIndex((s, i) => i >= 2 &&
+        (/^(SKIP|EVAL|\d\.\d\/5|PDF |✅|❌)/.test(s) || /^\d\.\d\/5$/.test(s)));
+      const tail = segs.slice(1, tailEnd === -1 ? undefined : tailEnd).join(' | ')
+        .split(' · ')[0].split(' — ')[0].trim();
+      if (tail && tail !== title) seen.add(companyRoleKey(company || '', tail));
     }
   }
 
