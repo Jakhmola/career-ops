@@ -11,6 +11,7 @@
  */
 
 import { chromium } from 'playwright';
+import { chromiumLaunchOptions } from './browser-exec.mjs';
 import { resolve, dirname } from 'path';
 import { readFile } from 'fs/promises';
 import { mkdirSync } from 'fs';
@@ -310,7 +311,7 @@ export async function renderHtmlToPdf(html, outputPath, opts = {}) {
 
   mkdirSync(dirname(outputPath), { recursive: true });
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(chromiumLaunchOptions(chromium, { headless: true }));
   try {
     const page = await browser.newPage();
 

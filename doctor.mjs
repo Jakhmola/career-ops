@@ -53,6 +53,13 @@ async function checkPlaywright() {
     if (existsSync(execPath)) {
       return { pass: true, label: 'Playwright chromium installed' };
     }
+    // Bundled download missing/incomplete — scripts fall back to a system
+    // Chrome/Chromium via browser-exec.mjs, so this is healthy too.
+    const { resolveBrowserExecutable } = await import('./browser-exec.mjs');
+    const systemBrowser = resolveBrowserExecutable(chromium);
+    if (systemBrowser) {
+      return { pass: true, label: `Playwright using system browser (${systemBrowser})` };
+    }
     return {
       pass: false,
       label: 'Playwright chromium not installed',

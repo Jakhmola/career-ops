@@ -600,7 +600,8 @@ async function verifyOffers(offers, { headedFallback = false, throttleBaseMs = 0
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    const { chromiumLaunchOptions } = await import('./browser-exec.mjs');
+    browser = await chromium.launch(chromiumLaunchOptions(chromium, { headless: true }));
   } catch (err) {
     throw new Error(
       `--verify could not launch Chromium (run "npx playwright install chromium" or re-run without --verify): ${err.message}`,
