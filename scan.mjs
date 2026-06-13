@@ -165,7 +165,9 @@ export function buildTitleFilter(titleFilter) {
 //     the home region is an option, even though "france" is blocked)
 //   - `block` matches → reject
 //   - `allow` empty → pass (already cleared block)
-//   - `allow` non-empty → must match at least one keyword
+//   - `allow` non-empty → must match at least one keyword, where remote-ish
+//     allow tokens (remote/europe/emea/...) only pass UNANCHORED strings —
+//     see REMOTE_ALLOW_TOKENS below for the anchored-remote rule.
 
 // Normalize a keyword list from portals.yml: tolerates a bare string
 // (wrapped to a 1-item array), null/undefined (→ []), and non-string
