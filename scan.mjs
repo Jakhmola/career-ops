@@ -375,6 +375,17 @@ const PERMANENT_SCAN_HISTORY_STATUSES = new Set([
   'skipped_blocked_host',
 ]);
 
+// Statuses that may be re-checked after `scan_history.recheck_after_days`,
+// exactly like 'added' rows. skipped_no_apply_control is a heuristic verdict
+// (overlay walls and unrecognized button languages produce false drops — see
+// the 2026-06-13 incident where 7/7 live LinkedIn postings were blacklisted),
+// so it must not be permanent: with a recheck window configured the classifier
+// gets another look once its detection improves.
+const RECHECKABLE_SCAN_HISTORY_STATUSES = new Set([
+  'added',
+  'skipped_no_apply_control',
+]);
+
 function daysBetweenIsoDates(start, end) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return null;
   const startDate = new Date(`${start}T00:00:00Z`);
@@ -385,7 +396,7 @@ function daysBetweenIsoDates(start, end) {
 
 export function shouldDedupScanHistoryRow({ firstSeen, status = 'added' }, { recheckAfterDays = null, today = new Date().toISOString().slice(0, 10) } = {}) {
   if (PERMANENT_SCAN_HISTORY_STATUSES.has(status)) return true;
-  if (status !== 'added') return true;
+  if (!RECHECKABLE_SCAN_HISTORY_STATUSES.has(status)) return true;
   if (recheckAfterDays == null) return true;
   const ageDays = daysBetweenIsoDates(firstSeen, today);
   if (ageDays == null) return true;

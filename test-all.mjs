@@ -175,6 +175,46 @@ try {
     fail(`Polish apply control not recognized: ${activePolishPosting.result} (${activePolishPosting.code})`);
   }
 
+  // Dutch postings: "Solliciteer direct" must be recognized as an apply control
+  // (2026-06-13: NL-market scans dropped live Dutch postings as no_apply_control).
+  const activeDutchPosting = classifyLiveness({
+    status: 200,
+    finalUrl: 'https://werkenbij.example.nl/vacature/data-scientist',
+    bodyText: 'Data Scientist. Gemeente Voorbeeld zoekt een data scientist met ervaring. '.repeat(6),
+    applyControls: ['Solliciteer direct'],
+  });
+  if (activeDutchPosting.result === 'active') {
+    pass('Dutch "Solliciteer" apply control marks a loaded posting active');
+  } else {
+    fail(`Dutch apply control not recognized: ${activeDutchPosting.result} (${activeDutchPosting.code})`);
+  }
+
+  // Dutch expired banner beats page content.
+  const expiredDutchPosting = classifyLiveness({
+    status: 200,
+    finalUrl: 'https://werkenbij.example.nl/vacature/ai-engineer',
+    bodyText: 'AI Engineer. Deze vacature is verlopen. Bekijk onze andere vacatures. '.repeat(6),
+    applyControls: [],
+  });
+  if (expiredDutchPosting.result === 'expired' && expiredDutchPosting.code === 'expired_body') {
+    pass('Dutch "vacature is verlopen" banner marks the posting expired');
+  } else {
+    fail(`Dutch expired banner not recognized: ${expiredDutchPosting.result} (${expiredDutchPosting.code})`);
+  }
+
+  // LinkedIn authwall redirect is an access wall, never expired.
+  const authwalled = classifyLiveness({
+    status: 200,
+    finalUrl: 'https://www.linkedin.com/authwall?trk=qf&original_referer=',
+    bodyText: 'Join LinkedIn or sign in to continue.',
+    applyControls: ['Sign in', 'Join now'],
+  });
+  if (authwalled.result === 'uncertain' && authwalled.code === 'access_blocked') {
+    pass('LinkedIn authwall redirect is access-blocked (uncertain), not expired');
+  } else {
+    fail(`LinkedIn authwall misclassified as ${authwalled.result} (${authwalled.code})`);
+  }
+
   // Headed-fallback-on-challenge path (liveness-browser.mjs). Fake Playwright
   // pages script the goto/evaluate calls so we can exercise the wrapper without
   // launching a browser. checkUrlLiveness reads body text first, apply controls
@@ -873,6 +913,21 @@ try {
     pass('scan-history TTL rechecks old added URLs while permanent statuses stay deduped');
   } else {
     fail('scan-history TTL policy did not match expected recheck/permanent behavior');
+  }
+
+  // skipped_no_apply_control is a heuristic verdict, not a permanent guard:
+  // it must recheck after the TTL (false drops self-heal — 2026-06-13 incident),
+  // while other non-added statuses (evaluated, skipped_title) stay deduped.
+  if (
+    shouldDedupScanHistoryRow({ firstSeen: '2026-05-01', status: 'skipped_no_apply_control' }, { recheckAfterDays: 30, today: '2026-06-10' }) === false &&
+    shouldDedupScanHistoryRow({ firstSeen: '2026-06-08', status: 'skipped_no_apply_control' }, { recheckAfterDays: 30, today: '2026-06-10' }) === true &&
+    shouldDedupScanHistoryRow({ firstSeen: '2026-05-01', status: 'skipped_no_apply_control' }, { today: '2026-06-10' }) === true &&
+    shouldDedupScanHistoryRow({ firstSeen: '2026-05-01', status: 'evaluated' }, { recheckAfterDays: 30, today: '2026-06-10' }) === true &&
+    shouldDedupScanHistoryRow({ firstSeen: '2026-05-01', status: 'skipped_title' }, { recheckAfterDays: 30, today: '2026-06-10' }) === true
+  ) {
+    pass('skipped_no_apply_control rechecks after TTL; other skip statuses stay permanent');
+  } else {
+    fail('skipped_no_apply_control recheck policy did not match expected behavior');
   }
 
 } catch (e) {

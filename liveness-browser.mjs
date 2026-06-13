@@ -126,6 +126,79 @@ export function rejectPrivateOrInvalid(url) {
   return null;
 }
 
+const OVERLAY_SETTLE_MS = 1000;
+
+// Collect the visible, non-chrome interactive controls on the page. Elements
+// under nav/header/footer or inside aria-hidden subtrees don't count — an
+// "Apply" in the site chrome says nothing about THIS posting.
+function collectVisibleControls(page) {
+  return page.evaluate(() => {
+    const candidates = Array.from(
+      document.querySelectorAll('a, button, input[type="submit"], input[type="button"], [role="button"]')
+    );
+
+    return candidates
+      .filter((element) => {
+        if (element.closest('nav, header, footer')) return false;
+        if (element.closest('[aria-hidden="true"]')) return false;
+
+        const style = window.getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        if (!element.getClientRects().length) return false;
+
+        return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
+      })
+      .map((element) => {
+        const label = [
+          element.innerText,
+          element.value,
+          element.getAttribute('aria-label'),
+          element.getAttribute('title'),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        return label;
+      })
+      .filter(Boolean);
+  });
+}
+
+// Best-effort overlay dismissal: Escape closes self-opening modals (LinkedIn
+// contextual sign-in), then click the first visible consent/dismiss button
+// (OneTrust, Cookiebot, LinkedIn banner, NL/DE/FR cookiewalls). Never throws.
+async function dismissOverlays(page) {
+  try {
+    await page.keyboard.press('Escape');
+  } catch {
+    // page may be navigating; dismissal is best-effort
+  }
+  try {
+    await page.evaluate(() => {
+      const CONSENT = /^(accept( all)?( cookies)?|alles? accepteren|accepteren|akkoord|ik ga akkoord|reject( all)?( non-essential)?|alles weigeren|weigeren|alle (akzeptieren|ablehnen)|tout (accepter|refuser)|got it|i (understand|agree)|dismiss|close|sluiten)$/i;
+      const candidates = Array.from(
+        document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]')
+      );
+      for (const el of candidates) {
+        const label = (el.innerText || el.value || el.getAttribute('aria-label') || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!label || !CONSENT.test(label)) continue;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
+        if (!el.getClientRects().length) continue;
+        el.click();
+        return label;
+      }
+      return null;
+    });
+  } catch {
+    // same: never let dismissal failures break classification
+  }
+}
+
 export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
   const guardError = rejectPrivateOrInvalid(url);
   if (guardError) {
@@ -139,42 +212,28 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
     // for the headed retry, where a JS anti-bot interstitial needs a moment to clear.
     await page.waitForTimeout(HYDRATION_WAIT_MS + extraSettleMs);
 
-    const finalUrl = page.url();
-    const bodyText = await page.evaluate(() => document.body?.innerText ?? '');
-    const applyControls = await page.evaluate(() => {
-      const candidates = Array.from(
-        document.querySelectorAll('a, button, input[type="submit"], input[type="button"], [role="button"]')
-      );
-
-      return candidates
-        .filter((element) => {
-          if (element.closest('nav, header, footer')) return false;
-          if (element.closest('[aria-hidden="true"]')) return false;
-
-          const style = window.getComputedStyle(element);
-          if (style.display === 'none' || style.visibility === 'hidden') return false;
-          if (!element.getClientRects().length) return false;
-
-          return Array.from(element.getClientRects()).some((rect) => rect.width > 0 && rect.height > 0);
-        })
-        .map((element) => {
-          const label = [
-            element.innerText,
-            element.value,
-            element.getAttribute('aria-label'),
-            element.getAttribute('title'),
-          ]
-            .filter(Boolean)
-            .join(' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-          return label;
-        })
-        .filter(Boolean);
+    const readSignals = async () => ({
+      status,
+      finalUrl: page.url(),
+      bodyText: await page.evaluate(() => document.body?.innerText ?? ''),
+      applyControls: await collectVisibleControls(page),
     });
 
-    return classifyLiveness({ status, finalUrl, bodyText, applyControls });
+    let verdict = classifyLiveness(await readSignals());
+
+    // Overlay blindness: cookie-consent walls and self-opening sign-in modals
+    // (LinkedIn guest pages, NL cookiewalls) mark the page behind them
+    // aria-hidden="true", so a perfectly live posting's Apply button is invisible
+    // to the collector and the page misclassifies as no_apply_control — which
+    // scan --verify then drops and dedup-blocks. Only that verdict warrants the
+    // retry: challenges, expirations, and active pages return as-is.
+    if (verdict.code === 'no_apply_control') {
+      await dismissOverlays(page);
+      await page.waitForTimeout(OVERLAY_SETTLE_MS);
+      verdict = classifyLiveness(await readSignals());
+    }
+
+    return verdict;
   } catch (err) {
     // Transient failures (timeout, DNS, TLS, 5xx) shouldn't be treated as expired —
     // doing so would cause scan --verify to drop the URL and write it to scan-history,

@@ -14,6 +14,11 @@ const HARD_EXPIRED_PATTERNS = [
   /closed on (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}/i,
   /diese stelle (ist )?(nicht mehr|bereits) besetzt/i,
   /offre (expirée|n'est plus disponible)/i,
+  // Dutch (NL boards: werkenbij sites, gemeente boards, recruitee-hosted pages):
+  // "Deze vacature is verlopen/gesloten/vervallen/al vervuld/niet meer beschikbaar".
+  /vacature is (verlopen|gesloten|vervallen|ingetrokken|(al |reeds )?vervuld)/i,
+  /deze vacature (is |bestaat )?niet (meer|langer)/i,
+  /vacature (kon niet worden gevonden|niet gevonden)/i,
 ];
 
 const LISTING_PAGE_PATTERNS = [
@@ -58,6 +63,12 @@ const APPLY_PATTERNS = [
   /\baplikuj\b/i,
   /panelu aplikowania/i,
   /wyślij (cv|aplikacj)/i,
+  // Dutch (werkenbij sites, gemeente boards, NL agencies): "Solliciteer" /
+  // "Solliciteer direct/nu" / "Direct solliciteren" / "Reageer op deze vacature".
+  // Without these, every Dutch-language posting falls to no_apply_control.
+  /\bsollicit(eer|eren)\b/i,
+  /reageer (op deze vacature|direct|nu)/i,
+  /\bstuur je cv\b/i,
 ];
 
 const MIN_CONTENT_CHARS = 300;
@@ -85,6 +96,13 @@ export function classifyLiveness({ status = 0, finalUrl = '', bodyText = '', app
   }
   if (status === 403 || status === 503) {
     return { result: 'uncertain', code: 'access_blocked', reason: `HTTP ${status} (access blocked, likely anti-bot)` };
+  }
+
+  // LinkedIn bounces logged-out browsers to /authwall on a fraction of guest
+  // requests. That's an access wall, not a dead posting — same family as the
+  // bot challenges above.
+  if (/linkedin\.com\/authwall/i.test(finalUrl)) {
+    return { result: 'uncertain', code: 'access_blocked', reason: 'LinkedIn authwall (logged-out access blocked)' };
   }
 
   const expiredUrl = firstMatch(EXPIRED_URL_PATTERNS, finalUrl);
