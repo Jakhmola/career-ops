@@ -128,11 +128,40 @@ export function rejectPrivateOrInvalid(url) {
 
 const OVERLAY_SETTLE_MS = 1000;
 
-// Collect the visible, non-chrome interactive controls on the page. Elements
-// under nav/header/footer or inside aria-hidden subtrees don't count — an
-// "Apply" in the site chrome says nothing about THIS posting.
-function collectVisibleControls(page) {
-  return page.evaluate(() => {
+// Body text across all frames (top first) — expired banners ("no longer
+// accepting applications") render inside ATS embed iframes too.
+async function collectBodyText(page) {
+  const parts = [];
+  const frames = typeof page.frames === 'function' ? page.frames() : [page];
+  for (const frame of frames) {
+    try {
+      parts.push(await frame.evaluate(() => document.body?.innerText ?? ''));
+    } catch {
+      // detached/navigating frames are skippable
+    }
+  }
+  return parts.join('\n');
+}
+
+// Collect the visible, non-chrome interactive controls on the page — across
+// ALL frames: branded career sites embed their ATS board in an iframe
+// (Greenhouse gh_jid embeds, etc.), so the Apply control and any expired
+// banner live in a child frame the top document never sees.
+async function collectVisibleControls(page) {
+  const all = [];
+  const frames = typeof page.frames === 'function' ? page.frames() : [page];
+  for (const frame of frames) {
+    try {
+      all.push(...await collectVisibleControlsInFrame(frame));
+    } catch {
+      // detached/navigating frames are skippable, not fatal
+    }
+  }
+  return all;
+}
+
+function collectVisibleControlsInFrame(frame) {
+  return frame.evaluate(() => {
     const candidates = Array.from(
       document.querySelectorAll('a, button, input[type="submit"], input[type="button"], [role="button"]')
     );
@@ -215,7 +244,7 @@ export async function checkUrlLiveness(page, url, { extraSettleMs = 0 } = {}) {
     const readSignals = async () => ({
       status,
       finalUrl: page.url(),
-      bodyText: await page.evaluate(() => document.body?.innerText ?? ''),
+      bodyText: await collectBodyText(page),
       applyControls: await collectVisibleControls(page),
     });
 
