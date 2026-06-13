@@ -918,6 +918,25 @@ async function main() {
     }
   };
 
+  // Persist a captured JD for offers we KEEP (scrapers attach `description`;
+  // some aggregators like Careerjet do too) and reference it offline via
+  // local:jds/. Matters double for aggregators: their tracking-wrapper URLs
+  // (jobviewtrack.com) rot within days, so the JD text is often the only
+  // durable evaluation source. Skipped on dry-run to honor the no-write
+  // contract. The canonical url stays on the offer for dedup/verify/history.
+  const jdUsedNames = new Set(); // de-dup JD filenames across all offers this scan
+  const persistJd = (offer, job, srcLabel) => {
+    if (dryRun || !job.description) return;
+    const file = jdFilename(job, jdUsedNames);
+    try {
+      if (!existsSync(JDS_DIR)) mkdirSync(JDS_DIR, { recursive: true });
+      writeFileSync(path.join(JDS_DIR, file), renderJd(job), 'utf-8');
+      offer.pipelineUrl = `local:jds/${file}`;
+    } catch (err) {
+      console.error(`⚠️  ${srcLabel}: could not write jds/${file} — ${err.message}`);
+    }
+  };
+
   const tasks = targets.map(company => async () => {
     let provider = company._provider;
     const ctx = makeHttpCtx();
@@ -1058,7 +1077,9 @@ async function main() {
           seenUrls.add(canonUrl);
           seenCompanyRoles.add(key);
           statFor(aggId).kept++;
-          newOffers.push({ ...job, source: aggId });
+          const offer = { ...job, source: aggId };
+          persistJd(offer, job, aggId);
+          newOffers.push(offer);
         }
       } catch (err) {
         errors.push({ company: `aggregator:${aggId}`, error: err.message });
@@ -1084,7 +1105,6 @@ async function main() {
       : {};
 
   const scraperTasks = [];
-  const jdUsedNames = new Set(); // de-dup JD filenames across all scraped offers this scan
   for (const [scrId, scrConfig] of Object.entries(scrapers)) {
     if (!scrConfig || typeof scrConfig !== 'object') continue;
     if (scrConfig.enabled === false) continue;
@@ -1135,20 +1155,7 @@ async function main() {
           // `board` (job.site, e.g. linkedin/indeed) rides along so the summary
           // can break a scraper's contribution down per board.
           const offer = { title: job.title, url: job.url, company: job.company, location: job.location, source: scrId, board: job.site };
-          // Persist the captured JD (scrapers attach `description`) for offers we
-          // KEEP, then reference it offline via local:jds/. Skipped on dry-run to
-          // honor the no-write contract. The canonical url stays on the offer for
-          // dedup/verify/scan-history; only pipeline.md uses the local ref.
-          if (!dryRun && job.description) {
-            const file = jdFilename(job, jdUsedNames);
-            try {
-              if (!existsSync(JDS_DIR)) mkdirSync(JDS_DIR, { recursive: true });
-              writeFileSync(path.join(JDS_DIR, file), renderJd(job), 'utf-8');
-              offer.pipelineUrl = `local:jds/${file}`;
-            } catch (err) {
-              console.error(`⚠️  ${scrId}: could not write jds/${file} — ${err.message}`);
-            }
-          }
+          persistJd(offer, job, scrId);
           newOffers.push(offer);
         }
       } catch (err) {
