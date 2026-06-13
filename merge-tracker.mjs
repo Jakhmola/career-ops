@@ -179,6 +179,24 @@ function parseScore(s) {
   return m ? parseFloat(m[1]) : 0;
 }
 
+// Markdown table cells are pipe-delimited and every downstream consumer splits
+// on a raw '|' (parseAppLine here, verify-pipeline.mjs, the dashboard). A '|'
+// inside a field value — e.g. a role harvested from a pipe-laden posting title
+// like "AI Engineer | GenAI & Automation" — injects a phantom column and shifts
+// score→status, status→pdf, silently corrupting the row. Tabs/newlines would do
+// the same. Escaping as '\|' is not an option because the naive splitters would
+// still break on it, so neutralize at write time: every emitted cell is then
+// guaranteed to be exactly one column. (Regression found 2026-06-13: Haystack
+// "AI Engineer | GenAI & Automation" landed "GenAI & Automation" in the score
+// column and "1.0/5" in the status column.)
+function mdCell(value) {
+  return String(value ?? '')
+    .replace(/[\t\r\n]+/g, ' ')
+    .replace(/\s*\|\s*/g, ' / ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function parseAppLine(line) {
   const parts = line.split('|').map(s => s.trim());
   if (parts.length < 9) return null;
@@ -397,7 +415,7 @@ for (const file of tsvFiles) {
       console.log(`🔄 Update: #${duplicate.num} ${addition.company} — ${addition.role} (${oldScore}→${newScore})`);
       const lineIdx = appLines.indexOf(duplicate.raw);
       if (lineIdx >= 0) {
-        const updatedLine = `| ${duplicate.num} | ${addition.date} | ${addition.company} | ${addition.role} | ${addition.score} | ${duplicate.status} | ${duplicate.pdf} | ${addition.report} | Re-eval ${addition.date} (${oldScore}→${newScore}). ${addition.notes} |`;
+        const updatedLine = `| ${duplicate.num} | ${mdCell(addition.date)} | ${mdCell(addition.company)} | ${mdCell(addition.role)} | ${mdCell(addition.score)} | ${mdCell(duplicate.status)} | ${mdCell(duplicate.pdf)} | ${addition.report} | ${mdCell(`Re-eval ${addition.date} (${oldScore}→${newScore}). ${addition.notes}`)} |`;
         appLines[lineIdx] = updatedLine;
         updated++;
       }
@@ -410,7 +428,7 @@ for (const file of tsvFiles) {
     const entryNum = addition.num > maxNum ? addition.num : ++maxNum;
     if (addition.num > maxNum) maxNum = addition.num;
 
-    const newLine = `| ${entryNum} | ${addition.date} | ${addition.company} | ${addition.role} | ${addition.score} | ${addition.status} | ${addition.pdf} | ${addition.report} | ${addition.notes} |`;
+    const newLine = `| ${entryNum} | ${mdCell(addition.date)} | ${mdCell(addition.company)} | ${mdCell(addition.role)} | ${mdCell(addition.score)} | ${mdCell(addition.status)} | ${mdCell(addition.pdf)} | ${addition.report} | ${mdCell(addition.notes)} |`;
     newLines.push(newLine);
     added++;
     console.log(`➕ Add #${entryNum}: ${addition.company} — ${addition.role} (${addition.score})`);

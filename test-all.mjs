@@ -1646,6 +1646,53 @@ try {
   fail(`merge-tracker fuzzy dedup tests crashed: ${e.message}`);
 }
 
+console.log('\n🧪 Testing merge-tracker pipe-in-field sanitization (column-injection guard)...');
+try {
+  const mergeTmp = mkdtempSync(join(tmpdir(), 'career-ops-mdcell-'));
+  try {
+    mkdirSync(join(mergeTmp, 'data'));
+    mkdirSync(join(mergeTmp, 'reports'));
+    const additionsDir = join(mergeTmp, 'additions');
+    mkdirSync(additionsDir);
+    const tracker = join(mergeTmp, 'data', 'applications.md');
+    writeFileSync(tracker,
+      '# Applications Tracker\n\n' +
+      '| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n' +
+      '|---|------|---------|------|-------|--------|-----|--------|-------|\n');
+    writeFileSync(join(mergeTmp, 'reports', '540-haystack-2026-06-13.md'), '# fixture\n');
+    // Role harvested from a pipe-laden posting title — the exact 2026-06-13 corruption.
+    writeFileSync(join(additionsDir, '540-haystack.tsv'),
+      '540\t2026-06-13\tHaystack People\tAI Engineer | GenAI & Automation\tSKIP\t1.0/5\t❌\t[540](reports/540-haystack-2026-06-13.md)\tDutch C1+ | hard blocker\n');
+
+    run(NODE, ['merge-tracker.mjs'], { env: { ...process.env, CAREER_OPS_TRACKER: tracker, CAREER_OPS_ADDITIONS: additionsDir } });
+    const merged = readFileSync(tracker, 'utf-8');
+    const row = merged.split('\n').find(l => l.includes('Haystack People')) || '';
+    const parts = row.split('|'); // | c1 | … | c9 | → leading + 9 cells + trailing = 11
+
+    if (parts.length === 11) {
+      pass('pipe-laden role stays a single cell (row has exactly 9 columns)');
+    } else {
+      fail(`pipe in field injected columns: row split into ${parts.length - 2} cells, expected 9 → ${row}`);
+    }
+    // Score and status must land in their own columns, not be shifted by the stray pipe.
+    if (parts[5] && parts[5].trim() === '1.0/5' && parts[6] && parts[6].trim() === 'SKIP') {
+      pass('score (1.0/5) and status (SKIP) stay in their own columns');
+    } else {
+      fail(`score/status shifted by pipe injection: score="${(parts[5]||'').trim()}" status="${(parts[6]||'').trim()}"`);
+    }
+    // The role content itself is preserved (pipe rewritten, not dropped).
+    if (parts[4] && parts[4].includes('GenAI & Automation')) {
+      pass('role content preserved after pipe sanitization');
+    } else {
+      fail(`role content lost during sanitization: "${(parts[4]||'').trim()}"`);
+    }
+  } finally {
+    rmSync(mergeTmp, { recursive: true, force: true });
+  }
+} catch (e) {
+  fail(`merge-tracker pipe-sanitization test crashed: ${e.message}`);
+}
+
 // ── 12. COLD-START TRIGGER ──────────────────────────────────────
 
 console.log('\n12. Cold-start trigger (deterministic onboarding state)');
