@@ -832,6 +832,29 @@ async function main() {
   const newOffers = [];
   const errors = [...resolveErrors];
 
+  // Filter observability: every rejection is counted per source and sampled to
+  // data/parser-output/filter-log-<date>.tsv (gitignored) so false negatives —
+  // good roles killed by a filter keyword — can actually be audited. Before
+  // this, a 90%+ title kill rate was a single opaque counter.
+  const sourceStats = new Map();
+  const rejectSamples = [];
+  const REJECT_SAMPLE_CAP = 10000;
+  const statFor = (source) => {
+    if (!sourceStats.has(source)) {
+      sourceStats.set(source, { found: 0, kept: 0, title: 0, location: 0, salary: 0, dup: 0 });
+    }
+    return sourceStats.get(source);
+  };
+  const recordReject = (source, job, reason) => {
+    statFor(source)[reason]++;
+    if (rejectSamples.length < REJECT_SAMPLE_CAP) {
+      const clean = (s) => String(s || '').replace(/[\t\n\r]+/g, ' ').trim();
+      rejectSamples.push(
+        `${clean(source)}\t${clean(reason)}\t${clean(job.title)}\t${clean(job.company)}\t${clean(job.location)}\t${clean(job.url)}`
+      );
+    }
+  };
+
   const tasks = targets.map(company => async () => {
     let provider = company._provider;
     const ctx = makeHttpCtx();
@@ -858,27 +881,34 @@ async function main() {
       totalFound += jobs.length;
 
       for (const job of jobs) {
+        statFor(sourceName).found++;
         if (!titleFilter(job.title)) {
           totalFilteredTitle++;
+          recordReject(sourceName, job, 'title');
           continue;
         }
         if (!locationFilter(job.location)) {
           totalFilteredLocation++;
+          recordReject(sourceName, job, 'location');
           continue;
         }
         if (!salaryFilter(job.salary)) {
           totalFilteredSalary++;
+          recordReject(sourceName, job, 'salary');
           continue;
         }
         if (seenUrls.has(job.url)) {
           totalDupes++;
+          recordReject(sourceName, job, 'dup');
           continue;
         }
         const key = companyRoleKey(job.company, job.title);
         if (seenCompanyRoles.has(key)) {
           totalDupes++;
+          recordReject(sourceName, job, 'dup');
           continue;
         }
+        statFor(sourceName).kept++;
         // Mark as seen to avoid intra-scan dupes
         seenUrls.add(job.url);
         seenCompanyRoles.add(key);
@@ -954,13 +984,15 @@ async function main() {
         totalFound += jobs.length;
         for (const job of jobs) {
           if (!job || typeof job.url !== 'string' || !job.url) continue;
-          if (!titleFilter(job.title || '')) { totalFilteredTitle++; continue; }
-          if (!locationFilter(job.location)) { totalFilteredLocation++; continue; }
-          if (seenUrls.has(job.url)) { totalDupes++; continue; }
+          statFor(aggId).found++;
+          if (!titleFilter(job.title || '')) { totalFilteredTitle++; recordReject(aggId, job, 'title'); continue; }
+          if (!locationFilter(job.location)) { totalFilteredLocation++; recordReject(aggId, job, 'location'); continue; }
+          if (seenUrls.has(job.url)) { totalDupes++; recordReject(aggId, job, 'dup'); continue; }
           const key = companyRoleKey(job.company, job.title);
-          if (seenCompanyRoles.has(key)) { totalDupes++; continue; }
+          if (seenCompanyRoles.has(key)) { totalDupes++; recordReject(aggId, job, 'dup'); continue; }
           seenUrls.add(job.url);
           seenCompanyRoles.add(key);
+          statFor(aggId).kept++;
           newOffers.push({ ...job, source: aggId });
         }
       } catch (err) {
@@ -1021,13 +1053,19 @@ async function main() {
         totalFound += jobs.length;
         for (const job of jobs) {
           if (!job || typeof job.url !== 'string' || !job.url) continue;
-          if (!titleFilter(job.title || '')) { totalFilteredTitle++; continue; }
-          if (!locationFilter(job.location)) { totalFilteredLocation++; continue; }
-          if (seenUrls.has(job.url)) { totalDupes++; continue; }
+          // Per-board granularity (jobspy:linkedin vs jobspy:indeed) — the boards
+          // have very different noise profiles, so lumping them hides which one
+          // a filter problem lives on.
+          const scrSource = job.site ? `${scrId}:${job.site}` : scrId;
+          statFor(scrSource).found++;
+          if (!titleFilter(job.title || '')) { totalFilteredTitle++; recordReject(scrSource, job, 'title'); continue; }
+          if (!locationFilter(job.location)) { totalFilteredLocation++; recordReject(scrSource, job, 'location'); continue; }
+          if (seenUrls.has(job.url)) { totalDupes++; recordReject(scrSource, job, 'dup'); continue; }
           const key = companyRoleKey(job.company, job.title);
-          if (seenCompanyRoles.has(key)) { totalDupes++; continue; }
+          if (seenCompanyRoles.has(key)) { totalDupes++; recordReject(scrSource, job, 'dup'); continue; }
           seenUrls.add(job.url);
           seenCompanyRoles.add(key);
+          statFor(scrSource).kept++;
           // `board` (job.site, e.g. linkedin/indeed) rides along so the summary
           // can break a scraper's contribution down per board.
           const offer = { title: job.title, url: job.url, company: job.company, location: job.location, source: scrId, board: job.site };
@@ -1114,6 +1152,23 @@ async function main() {
     }
   }
 
+  // 6c. Persist filter-rejection samples so false negatives can be audited
+  // (data/parser-output/ is gitignored). Overwritten per run — it documents
+  // the LAST scan of the day, which is what a filter-tuning session needs.
+  if (!dryRun && rejectSamples.length > 0) {
+    try {
+      const dir = path.join('data', 'parser-output');
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        path.join(dir, `filter-log-${date}.tsv`),
+        'source\treason\ttitle\tcompany\tlocation\turl\n' + rejectSamples.join('\n') + '\n',
+        'utf-8',
+      );
+    } catch (err) {
+      console.error(`⚠️  could not write filter log: ${err.message}`);
+    }
+  }
+
   // 6b. Flush aggregator API usage into the monthly ledger (skip on dry-run —
   // dry-run makes no file writes, matching tracked-company behavior).
   if (!dryRun && apiCallCounts.size > 0) {
@@ -1153,6 +1208,23 @@ async function main() {
     console.log(`Aggregator API calls:  ${parts}`);
   }
   console.log(`New offers added:      ${verifiedOffers.length}`);
+
+  // Per-source funnel: where jobs come from and which filter eats them. A
+  // 90% title kill on one source is a tuning signal (query too broad or
+  // filter too strict); the same number across all sources is just noise floor.
+  if (sourceStats.size > 0) {
+    console.log(`\nSource funnel (found → kept | rejected by):`);
+    const funnel = [...sourceStats.entries()].sort((a, b) => b[1].found - a[1].found);
+    for (const [src, s] of funnel) {
+      const rejects = [
+        s.title ? `title ${s.title}` : null,
+        s.location ? `loc ${s.location}` : null,
+        s.salary ? `salary ${s.salary}` : null,
+        s.dup ? `dup ${s.dup}` : null,
+      ].filter(Boolean).join(', ');
+      console.log(`  ${src.padEnd(18)} ${String(s.found).padStart(5)} → ${String(s.kept).padStart(3)}${rejects ? `  (${rejects})` : ''}`);
+    }
+  }
 
   // Per-source breakdown of added offers (tracked-company providers + aggregators
   // + scrapers). Scraper sources carry a `board` (e.g. linkedin/indeed), so their
