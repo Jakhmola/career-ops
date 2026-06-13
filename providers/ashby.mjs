@@ -1,6 +1,8 @@
 // @ts-check
 /** @typedef {import('./_types.js').Provider} Provider */
 
+import { htmlToText } from './_jd.mjs';
+
 // Ashby provider — hits the public posting-api endpoint.
 // Auto-detects from careers_url pattern `https://jobs.ashbyhq.com/<slug>`.
 //
@@ -114,14 +116,20 @@ export default {
       try {
         const json = /** @type {any} */ (await ctx.fetchJson(apiUrl, { timeoutMs: ASHBY_TIMEOUT_MS }));
         const jobs = Array.isArray(json?.jobs) ? json.jobs : [];
-        return jobs.map(/** @param {any} j */ (j) => ({
-          title: j.title || '',
-          url: j.jobUrl || '',
-          company: entry.name,
-          location: j.location || '',
-          salary: parseCompensation(j),
-          postedAt: toEpochMs(j.publishedAt),
-        }));
+        return jobs.map(/** @param {any} j */ (j) => {
+          // Ashby ships the posting body in the list response — capture it so
+          // scan.mjs can persist an offline JD for kept offers.
+          const description = j.descriptionPlain || htmlToText(j.descriptionHtml || '');
+          return {
+            title: j.title || '',
+            url: j.jobUrl || '',
+            company: entry.name,
+            location: j.location || '',
+            salary: parseCompensation(j),
+            postedAt: toEpochMs(j.publishedAt),
+            ...(description ? { description } : {}),
+          };
+        });
       } catch (e) {
         lastErr = e;
       }

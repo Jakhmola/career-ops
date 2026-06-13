@@ -1005,12 +1005,14 @@ async function main() {
         // rediscovery fallback. A null domain (no careers_url) marks the offer
         // as broad-discovery — ineligible for the fallback, per the issue scope.
         const careersUrlDomain = extractCareersUrlDomain(company.careers_url);
-        newOffers.push({
+        const offer = {
           ...job,
           source: sourceName,
           tracked: Boolean(careersUrlDomain),
           careersUrlDomain,
-        });
+        };
+        persistJd(offer, job, sourceName);
+        newOffers.push(offer);
       }
     } catch (err) {
       errors.push({ company: company.name, error: err.message });

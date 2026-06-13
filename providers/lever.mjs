@@ -31,6 +31,9 @@ export default {
       company: entry.name,
       location: j.categories?.location || '',
       postedAt: typeof j.createdAt === 'number' ? j.createdAt : undefined,
+      // Lever ships the posting body in the list response — capture it so
+      // scan.mjs can persist an offline JD for kept offers.
+      ...(j.descriptionPlain ? { description: j.descriptionPlain } : {}),
     }));
   },
 };

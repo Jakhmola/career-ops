@@ -1,6 +1,8 @@
 // @ts-check
 /** @typedef {import('./_types.js').Provider} Provider */
 
+import { htmlToText } from './_jd.mjs';
+
 // Recruitee provider — hits the public per-tenant offers API.
 // Auto-detects from careers_url pattern `https://<slug>.recruitee.com`.
 // Per-tenant subdomains are the variable part — SSRF defence uses a
@@ -124,11 +126,19 @@ export function parseRecruiteeResponse(json, companyName) {
       }
     }
 
+    // Recruitee includes the full posting body in the list response —
+    // capture it so scan.mjs can persist an offline JD for kept offers
+    // (the tracking/branded URLs may rot or sit behind cookiewalls).
+    const description = htmlToText(
+      [j.description, j.requirements].filter(Boolean).join('\n\n')
+    );
+
     return {
       title: j.title || '',
       url,
       location,
       company: companyName,
+      ...(description ? { description } : {}),
     };
   });
 }

@@ -44,6 +44,30 @@ export function slugify(value) {
 }
 
 /**
+ * Minimal HTML → readable text for ATS description fields (Recruitee
+ * description/requirements, Ashby descriptionHtml). Not a sanitizer — output
+ * goes into a local markdown file for offline evaluation, never a browser.
+ *
+ * @param {string} html
+ * @returns {string}
+ */
+export function htmlToText(html) {
+  return String(html || '')
+    .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr)[^>]*>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * Render a captured JD to markdown. Header carries the canonical employer URL
  * (so a human can still open the source) and the originating board.
  *
@@ -57,7 +81,7 @@ export function renderJd(job) {
     `**Company:** ${job.company || 'N/A'}`,
     `**Location:** ${job.location || 'N/A'}`,
     `**URL:** ${job.url || 'N/A'}`,
-    `**Source:** scraped via jobspy (${job.site || 'unknown'})`,
+    `**Source:** ${job.site ? `scraped via jobspy (${job.site})` : 'captured at scan time'}`,
     '',
     '---',
     '',
