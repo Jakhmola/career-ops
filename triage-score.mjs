@@ -108,6 +108,9 @@ export function scoreOffer(offer, config = {}) {
   } else {
     const matched = keywords.filter((k) => k.re.test(title));
     if (matched.some((k) => k.strong)) titlePts = 40;
+    // Weak token + engineering-role noun ("AI Deployment Strategist",
+    // "ML Researcher") is a real role match, not incidental noise.
+    else if (matched.length > 0 && /\b(engineer|scientist|researcher|architect|developer|strategist|specialist)\b/i.test(title)) titlePts = 32;
     else if (matched.length > 0) titlePts = 20;
     else titlePts = 10; // shouldn't happen for scanner-passed rows; floor it
   }
@@ -184,15 +187,28 @@ async function main() {
   const text = readFileSync(PIPELINE_PATH, 'utf-8');
   const lines = text.split('\n');
 
+  // Pipeline lines don't carry location or source — recover both from
+  // scan-history so retro-scores match scan-time scores.
+  const SCAN_HISTORY_PATH = path.join(ROOT, 'data', 'scan-history.tsv');
+  const historyByUrl = new Map();
+  if (existsSync(SCAN_HISTORY_PATH)) {
+    for (const line of readFileSync(SCAN_HISTORY_PATH, 'utf-8').split('\n').slice(1)) {
+      const c = line.split('\t');
+      if (c[0]) historyByUrl.set(c[0], { portal: c[2] || '', location: c[6] || '' });
+    }
+  }
+
   const scored = [];
   const newLines = lines.map((line) => {
     const parsed = parsePipelineLine(line);
     if (!parsed) return line;
+    const history = historyByUrl.get(parsed.url) || {};
     const offer = {
       title: parsed.title,
       url: parsed.url.startsWith('local:') ? '' : parsed.url,
       pipelineUrl: parsed.url,
-      location: '', // pipeline lines don't carry location; URL/source priors still apply
+      location: history.location || '',
+      source: history.portal || '',
       company: parsed.company,
     };
     const result = scoreOffer(offer, config);
