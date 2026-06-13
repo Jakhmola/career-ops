@@ -2064,6 +2064,72 @@ try {
   fail(`update-system SEMVER_RE test crashed: ${e.message}`);
 }
 
+// ── 17. SCAN-STATS TELEMETRY ────────────────────────────────────
+
+console.log('\n17. scan-stats telemetry');
+
+try {
+  const { normalizeSource, stripUrl, buildStats } =
+    await import(pathToFileURL(join(ROOT, 'scan-stats.mjs')).href);
+
+  // Source-family normalization: raw portal spellings collapse into stable
+  // families so per-source telemetry survives renames in scan.mjs.
+  const srcCases = [
+    ['websearch:remote-eu-boards', 'websearch'],
+    ['Ashby — AI Engineer', 'websearch'],   // named search_queries entries
+    ['greenhouse-api', 'ats:greenhouse'],
+    ['lever-scan', 'ats:lever'],
+    ['jobspy', 'jobspy'],
+    ['careerjet', 'careerjet'],
+    ['', 'unknown'],
+  ];
+  const srcFails = srcCases.filter(([raw, want]) => normalizeSource(raw) !== want);
+  if (srcFails.length === 0) {
+    pass('normalizeSource maps raw portal names to stable families');
+  } else {
+    fail(`normalizeSource mismatches: ${srcFails.map(([r, w]) => `${r}→${normalizeSource(r)} (want ${w})`).join(', ')}`);
+  }
+
+  // URL join normalization: protocol/www/trailing-slash/tracking-params must
+  // not break the scan-history ↔ report URL join.
+  if (
+    stripUrl('https://www.example.com/jobs/123/?utm_source=x&gh_src=abc') === 'example.com/jobs/123' &&
+    stripUrl('http://example.com/jobs/123') === stripUrl('https://example.com/jobs/123/') &&
+    stripUrl('https://example.com/jobs?id=5&utm_medium=email') === 'example.com/jobs?id=5'
+  ) {
+    pass('stripUrl normalizes protocol/www/slash/tracking params, keeps real params');
+  } else {
+    fail(`stripUrl normalization broken (got ${stripUrl('https://www.example.com/jobs/123/?utm_source=x&gh_src=abc')})`);
+  }
+
+  // buildStats joins scan rows to reports (by stripped URL) and tracker
+  // statuses (by report number), and computes per-source aggregates.
+  const rows = [
+    { url: 'https://a.com/1', firstSeen: '2026-06-01', portal: 'jobspy', title: 'AI Eng', company: 'A', status: 'added' },
+    { url: 'https://a.com/2', firstSeen: '2026-06-02', portal: 'jobspy', title: 'ML Eng', company: 'B', status: 'added' },
+    { url: 'https://b.com/1', firstSeen: '2026-06-01', portal: 'greenhouse-api', title: 'AI Eng', company: 'C', status: 'skipped_expired' },
+  ];
+  const reportIndex = new Map([
+    ['a.com/1', { reportNum: '001', score: 4.0 }],
+    ['a.com/2', { reportNum: '002', score: 3.0 }],
+  ]);
+  const trackerIndex = new Map([['001', 'Applied'], ['002', 'SKIP']]);
+  const stats = buildStats(rows, reportIndex, trackerIndex);
+  const jobspy = stats.find(s => s.source === 'jobspy');
+  const gh = stats.find(s => s.source === 'ats:greenhouse');
+  if (
+    jobspy && jobspy.total === 2 && jobspy.evaluated === 2 && jobspy.avgScore === 3.5 &&
+    jobspy.applied === 1 && jobspy.scanDays === 2 &&
+    gh && gh.total === 1 && gh.evaluated === 0 && gh.byStatus.skipped_expired === 1
+  ) {
+    pass('buildStats aggregates per source with report/tracker conversion join');
+  } else {
+    fail(`buildStats aggregation wrong: ${JSON.stringify({ jobspy, gh })}`);
+  }
+} catch (e) {
+  fail(`scan-stats test crashed: ${e.message}`);
+}
+
 // ── SUMMARY ─────────────────────────────────────────────────────
 
 console.log('\n' + '='.repeat(50));
