@@ -110,8 +110,13 @@ export function parseSmartRecruitersResponse(json, companyName) {
           && parsedRef.protocol === 'https:'
           && parsedRef.hostname === 'api.smartrecruiters.com'
           && parsedRef.pathname.startsWith('/v1/companies/')) {
-        const restOfPath = parsedRef.pathname.slice('/v1/companies/'.length);
-        url = `https://jobs.smartrecruiters.com/${restOfPath}`;
+        // ref path is `<slug>/postings/<id>`, but the PUBLIC posting URL shape
+        // is `jobs.smartrecruiters.com/<slug>/<id>[-seo-title]` — keeping the
+        // literal `/postings/` segment 404s every link (verified 2026-06-13).
+        const m = parsedRef.pathname.match(/^\/v1\/companies\/([^/]+)\/postings\/([^/]+)$/);
+        if (m) {
+          url = `https://jobs.smartrecruiters.com/${m[1]}/${m[2]}${slugified ? `-${slugified}` : ''}`;
+        }
       }
     }
     if (!url && j.id) {

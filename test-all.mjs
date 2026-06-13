@@ -1282,10 +1282,13 @@ try {
     fail(`row 1 location = ${JSON.stringify(jobs[1]?.location)}, expected "Paris, France, Remote"`);
   }
 
-  if (jobs[0]?.url === 'https://jobs.smartrecruiters.com/sgs/postings/abc-123') {
-    pass('parseSmartRecruitersResponse rewrites api.smartrecruiters.com → jobs.smartrecruiters.com');
+  // Public posting URL shape is /<slug>/<id>[-seo-title] — the literal
+  // /postings/ segment from the API ref 404s on jobs.smartrecruiters.com
+  // (verified against live Devoteam postings 2026-06-13).
+  if (jobs[0]?.url === 'https://jobs.smartrecruiters.com/sgs/abc-123-senior-pm') {
+    pass('parseSmartRecruitersResponse rewrites api ref → public /<slug>/<id>-<seo> URL');
   } else {
-    fail(`row 0 url = ${JSON.stringify(jobs[0]?.url)}`);
+    fail(`row 0 url = ${JSON.stringify(jobs[0]?.url)} (want https://jobs.smartrecruiters.com/sgs/abc-123-senior-pm)`);
   }
 
   if (jobs[2]?.url && jobs[2].url.startsWith('https://jobs.smartrecruiters.com/sgs/ghi-789')) {
