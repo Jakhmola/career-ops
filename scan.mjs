@@ -560,6 +560,10 @@ function loadSeenCompanyRoles() {
 // ── Pipeline writer ─────────────────────────────────────────────────
 
 export function appendToPipeline(offers) {
+  // A row without a URL segment poisons the pending-line parser downstream
+  // (segments shift, company/title misalign, dedup keys corrupt) — never
+  // write one.
+  offers = offers.filter((o) => String(o.pipelineUrl || o.url || '').trim());
   if (offers.length === 0) return;
 
   let text = readFileSync(PIPELINE_PATH, 'utf-8');

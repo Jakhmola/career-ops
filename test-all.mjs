@@ -1495,8 +1495,13 @@ try {
     },
     'Channable',
   );
-  if (offDomainOffers[0]?.url === 'https://channable.recruitee.com/o/good' && offDomainOffers[1]?.url === '' && offDomainOffers[2]?.url === '' && offDomainOffers[3]?.url === '') {
-    pass('parseRecruiteeResponse drops off-domain, non-https, and missing offer URLs');
+  // Off-domain HTTPS is ALLOWED since 2026-06-13: tenants with branded careers
+  // domains (Tether → careers.tether.io) put them in careers_url, and blanking
+  // those URLs killed the offers at the scanner's invalid-URL guard. Only
+  // non-https and missing URLs blank now; navigation safety lives in the
+  // liveness layer's private-host guard.
+  if (offDomainOffers[0]?.url === 'https://channable.recruitee.com/o/good' && offDomainOffers[1]?.url === 'https://evil.example/o/evil' && offDomainOffers[2]?.url === '' && offDomainOffers[3]?.url === '') {
+    pass('parseRecruiteeResponse keeps https URLs (branded domains), drops non-https/missing');
   } else {
     fail(`URL validation: row0=${JSON.stringify(offDomainOffers[0]?.url)}, row1=${JSON.stringify(offDomainOffers[1]?.url)}, row2=${JSON.stringify(offDomainOffers[2]?.url)}, row3=${JSON.stringify(offDomainOffers[3]?.url)}`);
   }

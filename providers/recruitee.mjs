@@ -105,13 +105,18 @@ export function parseRecruiteeResponse(json, companyName) {
     const remote = j.remote ? 'Remote' : '';
     const location = j.location || [city, country, remote].filter(Boolean).join(', ');
 
-    // Validate offer URL: must parse as https://<safe-slug>.recruitee.com/...
+    // Validate offer URL: any well-formed HTTPS URL is accepted. Tenants with
+    // a branded careers domain (Tether → careers.tether.io) put it in
+    // careers_url — rejecting non-*.recruitee.com hosts blanked the URL and
+    // the offer died at the scanner's invalid-URL guard. Navigation safety is
+    // the liveness layer's job (rejectPrivateOrInvalid blocks private hosts),
+    // same trust model as scraper/aggregator URLs.
     let url = '';
     const rawUrl = j.careers_url || j.url || '';
     if (typeof rawUrl === 'string' && rawUrl) {
       try {
         const parsed = new URL(rawUrl);
-        if (parsed.protocol === 'https:' && RECRUITEE_HOST_RE.test(parsed.hostname)) {
+        if (parsed.protocol === 'https:') {
           url = parsed.href;
         }
       } catch {
