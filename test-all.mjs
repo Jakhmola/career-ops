@@ -2185,6 +2185,49 @@ try {
   fail(`scan-stats test crashed: ${e.message}`);
 }
 
+// ── 18. ATS-DISCOVER ────────────────────────────────────────────
+
+console.log('\n18. ats-discover slug generation + harvesting');
+
+try {
+  const { slugCandidates, harvestCompanies } =
+    await import(pathToFileURL(join(ROOT, 'ats-discover.mjs')).href);
+
+  // Slug candidates: legal suffixes dropped, joined/hyphenated/first-word forms.
+  const picnic = slugCandidates('Picnic Technologies B.V.');
+  const edf = slugCandidates('ED&F Man Commodities');
+  const empty = slugCandidates('B.V.');
+  if (
+    picnic.includes('picnictechnologies') && picnic.includes('picnic-technologies') &&
+    picnic.includes('picnic') &&
+    edf.includes('ed-and-f-man-commodities') &&
+    empty.length === 0
+  ) {
+    pass('slugCandidates strips suffixes and emits joined/hyphen/first-word forms');
+  } else {
+    fail(`slugCandidates wrong: picnic=${JSON.stringify(picnic)} edf=${JSON.stringify(edf)} empty=${JSON.stringify(empty)}`);
+  }
+
+  // Harvest: frequency-ordered, denylist + already-tracked skipped.
+  const tsv = [
+    'url\tfirst_seen\tportal\ttitle\tcompany\tstatus\tlocation',
+    'u1\t2026-06-01\tjobspy\tAI Eng\tAcme\tadded\t',
+    'u2\t2026-06-02\tjobspy\tML Eng\tAcme\tadded\t',
+    'u3\t2026-06-02\tjobspy\tAI Eng\tLinkedIn\tadded\t',   // denylisted board artifact
+    'u4\t2026-06-02\tcareerjet\tAI Eng\tMiro\tadded\t',     // already tracked
+    'u5\t2026-06-03\tjobspy\tAI Eng\tZeta\tadded\t',
+  ].join('\n');
+  const harvested = harvestCompanies(tsv, { trackedNames: new Set(['miro']), limit: 10 });
+  if (harvested[0] === 'Acme' && harvested.includes('Zeta') &&
+      !harvested.includes('LinkedIn') && !harvested.includes('Miro')) {
+    pass('harvestCompanies orders by frequency, skips denylist and tracked names');
+  } else {
+    fail(`harvestCompanies wrong: ${JSON.stringify(harvested)}`);
+  }
+} catch (e) {
+  fail(`ats-discover test crashed: ${e.message}`);
+}
+
 // ── SUMMARY ─────────────────────────────────────────────────────
 
 console.log('\n' + '='.repeat(50));

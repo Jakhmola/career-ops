@@ -50,10 +50,35 @@ export default {
     const apiUrl = resolveApiUrl(entry);
     if (!apiUrl) throw new Error(`recruitee: cannot derive API URL for ${entry.name}`);
     assertRecruiteeUrl(apiUrl);
-    const json = await ctx.fetchJson(apiUrl, { redirect: 'error' });
-    return parseRecruiteeResponse(json, entry.name);
+    try {
+      const json = await ctx.fetchJson(apiUrl, { redirect: 'error' });
+      return parseRecruiteeResponse(json, entry.name);
+    } catch (err) {
+      // Tenant renames (rebrands/acquisitions) 302 inside *.recruitee.com —
+      // e.g. xccelerated.recruitee.com → xebiacareers.recruitee.com. Follow
+      // exactly ONE redirect, and only to a host that itself passes the same
+      // recruitee SSRF check; anything else re-throws the original error.
+      const target = await sameTenantRedirectTarget(apiUrl);
+      if (!target) throw err;
+      assertRecruiteeUrl(target);
+      const json = await ctx.fetchJson(target, { redirect: 'error' });
+      return parseRecruiteeResponse(json, entry.name);
+    }
   },
 };
+
+async function sameTenantRedirectTarget(url) {
+  try {
+    const res = await fetch(url, { method: 'GET', redirect: 'manual' });
+    if (res.status < 300 || res.status >= 400) return null;
+    const location = res.headers.get('location');
+    if (!location) return null;
+    const resolved = new URL(location, url).toString();
+    return RECRUITEE_HOST_RE.test(new URL(resolved).hostname) ? resolved : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Parse a Recruitee /api/offers/ response. Exported for unit tests.
