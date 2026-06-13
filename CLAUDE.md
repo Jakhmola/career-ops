@@ -64,9 +64,13 @@ AI-powered job search automation built on Claude Code: pipeline tracking, offer 
 | `analyze-patterns.mjs` | Pattern analysis script (JSON output) |
 | `followup-cadence.mjs` | Follow-up cadence calculator (JSON output) |
 | `data/follow-ups.md` | Follow-up history tracker |
-| `scan.mjs` | Zero-token portal scanner — hits Greenhouse/Ashby/Lever APIs directly, zero LLM cost |
-| `check-liveness.mjs` | Job posting liveness checker |
+| `scan.mjs` | Zero-token portal scanner — hits Greenhouse/Ashby/Lever APIs directly, zero LLM cost. Prints a per-source funnel; rejected jobs sampled to `data/parser-output/filter-log-<date>.tsv` |
+| `scan-stats.mjs` | Yield telemetry: per-source rows, eval rate, avg score, conversions (joins scan-history ↔ reports ↔ tracker) |
+| `ats-discover.mjs` | Probes 6 public ATS APIs for board slugs of companies harvested from scan-history; `--emit-yaml` prints tracked_companies entries |
+| `triage-score.mjs` | Pre-triage A/B/C grades on pending pipeline rows (` · pre:A78` annotations); scan.mjs applies them automatically, `--annotate` retro-scores |
+| `check-liveness.mjs` | Job posting liveness checker; `--pipeline` sweeps pending pipeline rows and checks expired ones off |
 | `liveness-core.mjs` | Shared liveness logic (expired signals win over generic Apply text) |
+| `browser-exec.mjs` | Playwright launch helper — falls back to system Chrome when the bundled Chromium download is broken |
 | `reports/` | Evaluation reports (format: `{###}-{company-slug}-{YYYY-MM-DD}.md`). Blocks A-F + G (Posting Legitimacy), plus `## Machine Summary` YAML for downstream scripts. Header includes `**Legitimacy:** {tier}`. |
 
 ### OpenCode Commands
