@@ -10,13 +10,17 @@
  * Usage:
  *   node check-liveness.mjs <url1> [url2] ...
  *   node check-liveness.mjs --file urls.txt
+ *   node check-liveness.mjs --pipeline      # sweep pending pipeline.md rows:
+ *                                           # expired ones are checked off with
+ *                                           # an EXPIRED note and scan-history
+ *                                           # gets status skipped_expired
  *
  * Exit code: 0 if all active, 1 if any expired or uncertain
  */
 
 import { chromium } from 'playwright';
 import { chromiumLaunchOptions } from './browser-exec.mjs';
-import { readFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import {
   checkUrlLivenessWithFallback,
   createHeadedPageProvider,
@@ -24,6 +28,48 @@ import {
   jitteredDelayMs,
   sleep,
 } from './liveness-browser.mjs';
+
+const PIPELINE_PATH = 'data/pipeline.md';
+const SCAN_HISTORY_PATH = 'data/scan-history.tsv';
+
+/** Extract pending pipeline rows with checkable http(s) URLs. */
+function pendingPipelineUrls(text) {
+  const urls = [];
+  for (const line of text.split('\n')) {
+    const m = line.match(/^- \[ \] (https?:\/\/\S+)/);
+    if (m) urls.push(m[1]);
+  }
+  return urls;
+}
+
+/**
+ * Check a pending row off as expired, preserving the row content:
+ *   - [ ] url | Co | Title · pre:A78  →  - [x] url | Co | Title · pre:A78 — EXPIRED (liveness 2026-06-13: reason)
+ */
+function markExpiredInPipeline(text, url, reason, date) {
+  return text
+    .split('\n')
+    .map((line) => {
+      if (!line.startsWith(`- [ ] ${url}`)) return line;
+      return `${line.replace('- [ ]', '- [x]')} — EXPIRED (liveness ${date}: ${reason})`;
+    })
+    .join('\n');
+}
+
+/** Flip the URL's scan-history row to skipped_expired so it stays deduped. */
+function markExpiredInScanHistory(text, url) {
+  return text
+    .split('\n')
+    .map((line) => {
+      const cols = line.split('\t');
+      if (cols[0] === url && (cols[5] === 'added' || cols[5] === undefined)) {
+        cols[5] = 'skipped_expired';
+        return cols.join('\t');
+      }
+      return line;
+    })
+    .join('\n');
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -37,16 +83,26 @@ async function main() {
   // after ~2 rapid hits, so a bulk run needs spacing. Default base 5000ms.
   const throttleArg = args.find((a) => a === '--throttle' || a.startsWith('--throttle='));
   const throttleBaseMs = throttleArg ? (Number(throttleArg.split('=')[1]) || 5000) : 0;
-  const positional = args.filter((a) => a !== '--no-fallback' && a !== throttleArg);
+  const pipelineMode = args.includes('--pipeline');
+  const positional = args.filter((a) => a !== '--no-fallback' && a !== '--pipeline' && a !== throttleArg);
 
-  if (positional.length === 0) {
+  if (positional.length === 0 && !pipelineMode) {
     console.error('Usage: node check-liveness.mjs [--no-fallback] [--throttle[=ms]] <url1> [url2] ...');
     console.error('       node check-liveness.mjs [--no-fallback] [--throttle[=ms]] --file urls.txt');
+    console.error('       node check-liveness.mjs [--no-fallback] [--throttle[=ms]] --pipeline');
     process.exit(1);
   }
 
   let urls;
-  if (positional[0] === '--file') {
+  let pipelineText = null;
+  if (pipelineMode) {
+    pipelineText = await readFile(PIPELINE_PATH, 'utf-8');
+    urls = pendingPipelineUrls(pipelineText);
+    if (urls.length === 0) {
+      console.log('No pending http(s) rows in pipeline.md — nothing to sweep.');
+      return;
+    }
+  } else if (positional[0] === '--file') {
     const text = await readFile(positional[1], 'utf-8');
     urls = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
   } else {
@@ -65,6 +121,7 @@ async function main() {
   const getHeadedPage = headed ? () => headed.get() : undefined;
 
   let active = 0, expired = 0, uncertain = 0;
+  const expiredUrls = [];
 
   // Sequential — project rule: never Playwright in parallel
   for (let i = 0; i < urls.length; i++) {
@@ -74,7 +131,7 @@ async function main() {
     console.log(`${icon} ${result.padEnd(10)} ${url}`);
     if (result !== 'active') console.log(`           ${reason}`);
     if (result === 'active') active++;
-    else if (result === 'expired') expired++;
+    else if (result === 'expired') { expired++; expiredUrls.push({ url, reason }); }
     else uncertain++;
 
     const wait = i < urls.length - 1 ? jitteredDelayMs(throttleBaseMs) : 0;
@@ -84,8 +141,24 @@ async function main() {
   if (headed) await headed.close();
   await browser.close();
 
+  // Pipeline sweep: check expired rows off (content preserved + EXPIRED note)
+  // and dedup-protect their URLs in scan-history. Re-read pipeline.md before
+  // writing — the sweep may run long and the file may have changed.
+  if (pipelineMode && expiredUrls.length > 0) {
+    const date = new Date().toISOString().slice(0, 10);
+    let pipeline = await readFile(PIPELINE_PATH, 'utf-8');
+    let history = await readFile(SCAN_HISTORY_PATH, 'utf-8').catch(() => null);
+    for (const { url, reason } of expiredUrls) {
+      pipeline = markExpiredInPipeline(pipeline, url, reason, date);
+      if (history != null) history = markExpiredInScanHistory(history, url);
+    }
+    await writeFile(PIPELINE_PATH, pipeline, 'utf-8');
+    if (history != null) await writeFile(SCAN_HISTORY_PATH, history, 'utf-8');
+    console.log(`\nSwept ${expiredUrls.length} expired row(s) out of the pending queue.`);
+  }
+
   console.log(`\nResults: ${active} active  ${expired} expired  ${uncertain} uncertain`);
-  if (expired > 0 || uncertain > 0) process.exit(1);
+  if (!pipelineMode && (expired > 0 || uncertain > 0)) process.exit(1);
 }
 
 main().catch(err => {

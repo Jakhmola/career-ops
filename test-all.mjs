@@ -2203,6 +2203,37 @@ try {
   fail(`scan-stats test crashed: ${e.message}`);
 }
 
+// ── 17b. URL CANONICALIZATION (dedup) ───────────────────────────
+
+console.log('\n17b. canonicalizeUrl dedup normalization');
+
+try {
+  const { canonicalizeUrl } = await import(pathToFileURL(join(ROOT, 'scan.mjs')).href);
+  const cases = [
+    // tracking wrappers collapse to the employer URL
+    ['https://jobs.booking.com/booking/jobs/29399/job?utm_source=indeed_integration&iis=Job%20Board&iisn=Indeed&indeed-apply-token=abc',
+      'https://jobs.booking.com/booking/jobs/29399/job'],
+    // protocol/www/trailing slash variants collapse
+    ['http://www.example.com/jobs/123/', 'https://example.com/jobs/123'],
+    // LinkedIn id is the identity (slash and query variants collapse)
+    ['https://www.linkedin.com/jobs/view/4425634561/?trk=feed', 'https://linkedin.com/jobs/view/4425634561'],
+    ['https://linkedin.com/jobs/view/4425634561', 'https://linkedin.com/jobs/view/4425634561'],
+    // identity params survive (gh_jid on embedded Greenhouse boards)
+    ['https://miro.com/careers/vacancy/8189372002?gh_jid=8189372002&utm_source=x',
+      'https://miro.com/careers/vacancy/8189372002?gh_jid=8189372002'],
+    // non-URLs pass through untouched
+    ['local:jds/foo.md', 'local:jds/foo.md'],
+  ];
+  const bad = cases.filter(([input, want]) => canonicalizeUrl(input) !== want);
+  if (bad.length === 0) {
+    pass('canonicalizeUrl collapses tracking/protocol/LinkedIn variants, keeps identity params');
+  } else {
+    fail(`canonicalizeUrl mismatches: ${bad.map(([i, w]) => `${i} → ${canonicalizeUrl(i)} (want ${w})`).join('; ')}`);
+  }
+} catch (e) {
+  fail(`canonicalizeUrl test crashed: ${e.message}`);
+}
+
 // ── 18. ATS-DISCOVER ────────────────────────────────────────────
 
 console.log('\n18. ats-discover slug generation + harvesting');

@@ -432,6 +432,45 @@ function scanHistoryPolicy(config = {}) {
   };
 }
 
+// ── URL canonicalization ────────────────────────────────────────────
+// The same posting re-enters under different URL spellings: aggregators wrap
+// employer URLs in tracking params (?utm_source=indeed_integration&
+// indeed-apply-token=...), boards vary protocol/www/trailing slash, LinkedIn
+// serves /jobs/view/<id> with and without slash and query. Dedup compares
+// CANONICAL forms; raw URLs are still what gets stored and displayed.
+
+const TRACKING_PARAM_PREFIX_RE = /^(utm_|mtm_|pk_)/i;
+const TRACKING_PARAMS = new Set([
+  'gh_src', 'lever-source', 'lever-origin', 'source', 'src', 'ref', 'referer',
+  'referrer', 'iis', 'iisn', 'indeed-apply-token', 'trk', 'tracking',
+  'trackingid', 'mc_cid', 'mc_eid', 'fbclid', 'gclid', 'original_referer',
+]);
+// NOT stripped: gh_jid (identifies the job on embedded Greenhouse boards),
+// jobId/id-style params — anything that may BE the posting identity.
+
+export function canonicalizeUrl(raw) {
+  const input = String(raw || '').trim();
+  let u;
+  try {
+    u = new URL(input);
+  } catch {
+    return input; // local:jds/... refs and malformed strings pass through
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return input;
+  u.protocol = 'https:';
+  u.hostname = u.hostname.toLowerCase().replace(/^www\./, '');
+  u.hash = '';
+  // LinkedIn job pages: the numeric id IS the identity.
+  const li = u.hostname === 'linkedin.com' && u.pathname.match(/^\/jobs\/view\/(\d+)/);
+  if (li) return `https://linkedin.com/jobs/view/${li[1]}`;
+  for (const key of [...u.searchParams.keys()]) {
+    if (TRACKING_PARAM_PREFIX_RE.test(key) || TRACKING_PARAMS.has(key.toLowerCase())) {
+      u.searchParams.delete(key);
+    }
+  }
+  return u.toString().replace(/\?$/, '').replace(/\/+$/, '');
+}
+
 export function loadSeenUrls(policy = {}) {
   const seen = new Set();
   let recheckEligible = 0;
@@ -442,7 +481,7 @@ export function loadSeenUrls(policy = {}) {
     for (const line of lines.slice(1)) { // skip header
       const [url, firstSeen, , , , status = 'added'] = line.split('\t');
       if (!url) continue;
-      if (shouldDedupScanHistoryRow({ firstSeen, status }, policy)) seen.add(url);
+      if (shouldDedupScanHistoryRow({ firstSeen, status }, policy)) seen.add(canonicalizeUrl(url));
       else recheckEligible++;
     }
   }
@@ -451,7 +490,7 @@ export function loadSeenUrls(policy = {}) {
   if (existsSync(PIPELINE_PATH)) {
     const text = readFileSync(PIPELINE_PATH, 'utf-8');
     for (const match of text.matchAll(/- \[[ x]\] (https?:\/\/\S+)/g)) {
-      seen.add(match[1]);
+      seen.add(canonicalizeUrl(match[1]));
     }
   }
 
@@ -459,7 +498,7 @@ export function loadSeenUrls(policy = {}) {
   if (existsSync(APPLICATIONS_PATH)) {
     const text = readFileSync(APPLICATIONS_PATH, 'utf-8');
     for (const match of text.matchAll(/https?:\/\/[^\s|)]+/g)) {
-      seen.add(match[0]);
+      seen.add(canonicalizeUrl(match[0]));
     }
   }
 
@@ -921,7 +960,8 @@ async function main() {
           recordReject(sourceName, job, 'salary');
           continue;
         }
-        if (seenUrls.has(job.url)) {
+        const canonUrl = canonicalizeUrl(job.url);
+        if (seenUrls.has(canonUrl)) {
           totalDupes++;
           recordReject(sourceName, job, 'dup');
           continue;
@@ -934,7 +974,7 @@ async function main() {
         }
         statFor(sourceName).kept++;
         // Mark as seen to avoid intra-scan dupes
-        seenUrls.add(job.url);
+        seenUrls.add(canonUrl);
         seenCompanyRoles.add(key);
         // Tag with the company's careers domain so verify can offer a 404/410
         // rediscovery fallback. A null domain (no careers_url) marks the offer
@@ -1011,10 +1051,11 @@ async function main() {
           statFor(aggId).found++;
           if (!titleFilter(job.title || '')) { totalFilteredTitle++; recordReject(aggId, job, 'title'); continue; }
           if (!locationFilter(job.location)) { totalFilteredLocation++; recordReject(aggId, job, 'location'); continue; }
-          if (seenUrls.has(job.url)) { totalDupes++; recordReject(aggId, job, 'dup'); continue; }
+          const canonUrl = canonicalizeUrl(job.url);
+          if (seenUrls.has(canonUrl)) { totalDupes++; recordReject(aggId, job, 'dup'); continue; }
           const key = companyRoleKey(job.company, job.title);
           if (seenCompanyRoles.has(key)) { totalDupes++; recordReject(aggId, job, 'dup'); continue; }
-          seenUrls.add(job.url);
+          seenUrls.add(canonUrl);
           seenCompanyRoles.add(key);
           statFor(aggId).kept++;
           newOffers.push({ ...job, source: aggId });
@@ -1084,10 +1125,11 @@ async function main() {
           statFor(scrSource).found++;
           if (!titleFilter(job.title || '')) { totalFilteredTitle++; recordReject(scrSource, job, 'title'); continue; }
           if (!locationFilter(job.location)) { totalFilteredLocation++; recordReject(scrSource, job, 'location'); continue; }
-          if (seenUrls.has(job.url)) { totalDupes++; recordReject(scrSource, job, 'dup'); continue; }
+          const canonUrl = canonicalizeUrl(job.url);
+          if (seenUrls.has(canonUrl)) { totalDupes++; recordReject(scrSource, job, 'dup'); continue; }
           const key = companyRoleKey(job.company, job.title);
           if (seenCompanyRoles.has(key)) { totalDupes++; recordReject(scrSource, job, 'dup'); continue; }
-          seenUrls.add(job.url);
+          seenUrls.add(canonUrl);
           seenCompanyRoles.add(key);
           statFor(scrSource).kept++;
           // `board` (job.site, e.g. linkedin/indeed) rides along so the summary
