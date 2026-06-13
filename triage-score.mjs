@@ -141,9 +141,40 @@ export function scoreOffer(offer, config = {}) {
   // 4. Captured-JD bonus (0–10)
   const jdPts = String(offer.pipelineUrl || '').startsWith('local:') ? 10 : 0;
 
-  const score = titlePts + locPts + srcPts + jdPts;
+  // 5. JD language penalty (0 to -35). When the JD text is available at scan
+  // time, a hard language requirement the candidate doesn't have is the single
+  // biggest evaluation-cost waster (full A-G run → 1.0/5 SKIP). Configure via
+  // portals.yml: triage.language_block: [Dutch, Nederlands].
+  const langPenalty = languagePenalty(offer.jdText || offer.description || '', config);
+
+  const score = Math.max(0, titlePts + locPts + srcPts + jdPts + langPenalty);
   const grade = score >= 72 ? 'A' : score >= 50 ? 'B' : 'C';
-  return { score, grade, parts: { title: titlePts, location: locPts, source: srcPts, jd: jdPts, family } };
+  return { score, grade, parts: { title: titlePts, location: locPts, source: srcPts, jd: jdPts, lang: langPenalty, family } };
+}
+
+// Dutch function words — enough hits means the JD itself is written in Dutch,
+// which nearly always implies Dutch-speaking expectations even without an
+// explicit requirement line.
+const DUTCH_BODY_RE = /\b(het|een|wij|jij|je bent|werkzaamheden|vacature|ervaring|kennis van|binnen|onze|jouw)\b/gi;
+
+export function languagePenalty(jdText, config = {}) {
+  const langs = (config.triage?.language_block || [])
+    .map((l) => String(l || '').trim())
+    .filter(Boolean);
+  if (langs.length === 0 || !jdText) return 0;
+  const alternation = langs.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  // "fluency in Dutch", "Dutch is required", "Nederlands vereist", ...
+  const requirementRe = new RegExp(
+    `(fluen|proficien|native|vloeiend|vereist|verplicht|required|mandatory|must speak)[^.\\n]{0,50}\\b(${alternation})\\b` +
+    `|\\b(${alternation})\\b[^.\\n]{0,60}(required|mandatory|vereist|verplicht|fluen|proficien|a must)`,
+    'i'
+  );
+  if (requirementRe.test(jdText)) return -35;
+  if (langs.some((l) => /^(dutch|nederlands)$/i.test(l))) {
+    const hits = jdText.match(DUTCH_BODY_RE);
+    if (hits && hits.length >= 25) return -20;
+  }
+  return 0;
 }
 
 /** Format the pipeline annotation, e.g. "pre:A78". */
@@ -203,6 +234,16 @@ async function main() {
     const parsed = parsePipelineLine(line);
     if (!parsed) return line;
     const history = historyByUrl.get(parsed.url) || {};
+    // When the offer has an offline JD (local:jds/...), read it so the
+    // language penalty can fire on retro-scoring too (scan-time scoring sees
+    // offer.description directly from the provider).
+    let jdText = '';
+    if (parsed.url.startsWith('local:')) {
+      const jdPath = path.join(ROOT, parsed.url.slice('local:'.length));
+      if (existsSync(jdPath)) {
+        try { jdText = readFileSync(jdPath, 'utf-8'); } catch { /* ignore */ }
+      }
+    }
     const offer = {
       title: parsed.title,
       url: parsed.url.startsWith('local:') ? '' : parsed.url,
@@ -210,6 +251,7 @@ async function main() {
       location: history.location || '',
       source: history.portal || '',
       company: parsed.company,
+      jdText,
     };
     const result = scoreOffer(offer, config);
     scored.push({ ...parsed, ...result });

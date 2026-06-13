@@ -2211,6 +2211,43 @@ try {
   fail(`scan-stats test crashed: ${e.message}`);
 }
 
+// ── 17a. TRIAGE LANGUAGE PENALTY ────────────────────────────────
+
+console.log('\n17a. triage language penalty');
+
+try {
+  const { languagePenalty, scoreOffer } =
+    await import(pathToFileURL(join(ROOT, 'triage-score.mjs')).href);
+  const cfg = { triage: { language_block: ['Dutch', 'Nederlands'] } };
+
+  const reqEn = languagePenalty('You must have professional fluency in Dutch and English.', cfg);
+  const reqNl = languagePenalty('Nederlands is vereist voor deze functie.', cfg);
+  const dutchBody = languagePenalty(
+    'Wij zoeken een data scientist. Het is een mooie vacature binnen onze organisatie. ' +
+    'Jij hebt ervaring en kennis van Python. Je bent analytisch. '.repeat(6), cfg);
+  const englishOk = languagePenalty('We are looking for a Machine Learning Engineer with Python experience.', cfg);
+  const noConfig = languagePenalty('Fluency in Dutch required', {});
+
+  if (reqEn === -35 && reqNl === -35 && dutchBody === -20 && englishOk === 0 && noConfig === 0) {
+    pass('languagePenalty: hard requirement -35, Dutch body -20, English/no-config 0');
+  } else {
+    fail(`languagePenalty wrong: reqEn=${reqEn} reqNl=${reqNl} dutchBody=${dutchBody} englishOk=${englishOk} noConfig=${noConfig}`);
+  }
+
+  // End-to-end: a strong-title Amsterdam offer with a Dutch requirement must
+  // drop out of A-grade.
+  const blocked = scoreOffer(
+    { title: 'AI Engineer', location: 'Amsterdam', source: 'jobspy',
+      description: 'Professional fluency in Dutch is required.' }, cfg);
+  if (blocked.grade !== 'A' && blocked.parts.lang === -35) {
+    pass('scoreOffer sinks a Dutch-required role below A-grade');
+  } else {
+    fail(`Dutch-required role still graded ${blocked.grade} (${blocked.score}, lang=${blocked.parts.lang})`);
+  }
+} catch (e) {
+  fail(`triage language penalty test crashed: ${e.message}`);
+}
+
 // ── 17b. URL CANONICALIZATION (dedup) ───────────────────────────
 
 console.log('\n17b. canonicalizeUrl dedup normalization');
