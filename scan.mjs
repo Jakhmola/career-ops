@@ -182,11 +182,21 @@ function normalizeKeywordList(value) {
     .filter(Boolean);
 }
 
+// Tokens whose allow-match means "remote/region-wide", not a concrete place.
+// They are trusted only when the location string is NOT anchored to a
+// non-allowed place: "Madrid, MD, Spain, Remote" is Spain-anchored remote
+// (a Spanish employment entity), not EU-remote — without this distinction
+// every global board leaks foreign postings through a trailing ", Remote".
+const REMOTE_ALLOW_TOKENS = new Set(['remote', 'europe', 'emea', 'eu', 'anywhere', 'worldwide', 'global']);
+const REMOTE_GENERIC_SEGMENT_RE = /\b(remote|hybrid|flexible|home\s*office|wfh|telework)\b/i;
+
 export function buildLocationFilter(locationFilter) {
   if (!locationFilter) return () => true;
   const alwaysAllow = normalizeKeywordList(locationFilter.always_allow);
   const allow = normalizeKeywordList(locationFilter.allow);
   const block = normalizeKeywordList(locationFilter.block);
+  const allowPlace = allow.filter(k => !REMOTE_ALLOW_TOKENS.has(k));
+  const allowRemote = allow.filter(k => REMOTE_ALLOW_TOKENS.has(k));
 
   return (location) => {
     if (typeof location !== 'string' || location.trim() === '') return true;
@@ -194,7 +204,18 @@ export function buildLocationFilter(locationFilter) {
     if (alwaysAllow.length > 0 && alwaysAllow.some(k => lower.includes(k))) return true;
     if (block.length > 0 && block.some(k => lower.includes(k))) return false;
     if (allow.length === 0) return true;
-    return allow.some(k => lower.includes(k));
+    // Concrete place tokens (cities/countries) match anywhere in the string.
+    if (allowPlace.some(k => lower.includes(k))) return true;
+    if (allowRemote.length === 0 || !allowRemote.some(k => lower.includes(k))) return false;
+    // A remote-ish token matched. Trust it only if every comma-ish segment is
+    // itself remote/region-flavored — i.e. there is no anchor to a place we
+    // did not allow ("Kraków, Poland, Remote" → anchored → reject;
+    // "Remote - Europe" / "Remote job" → unanchored → pass).
+    const segments = lower.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
+    const anchorSegments = segments.filter(
+      s => !allowRemote.some(k => s.includes(k)) && !REMOTE_GENERIC_SEGMENT_RE.test(s)
+    );
+    return anchorSegments.length === 0;
   };
 }
 
@@ -508,7 +529,10 @@ export function appendToPipeline(offers) {
   // `local:jds/...` ref, so evaluation reads the JD offline instead of hitting a
   // login wall) and falls back to the canonical URL otherwise. Dedup, liveness
   // verification, and scan-history all keep `o.url` (the employer URL).
-  const pipelineLine = (o) => `- [ ] ${o.pipelineUrl || o.url} | ${o.company} | ${o.title}`;
+  // `preScore` (set by main() via triage-score.mjs) rides along as a ` · pre:A78`
+  // annotation so the pipeline can be worked best-first. The ' · ' separator is
+  // already stripped by the company-role dedup parser.
+  const pipelineLine = (o) => `- [ ] ${o.pipelineUrl || o.url} | ${o.company} | ${o.title}${o.preScore ? ` · ${o.preScore}` : ''}`;
 
   // Support both English ("## Pending") and Spanish ("## Pendientes") markers so
   // the function works regardless of which language the file was initialised with.
@@ -1114,6 +1138,20 @@ async function main() {
     // Migrated offers re-enter the pipeline at their newly discovered URL.
     if (migratedOffers.length > 0) {
       verifiedOffers = [...verifiedOffers, ...migratedOffers];
+    }
+  }
+
+  // 5.6. Pre-triage scoring — cheap heuristic grade (A/B/C) per offer so the
+  // pipeline can be worked best-first. Never blocks a scan: scoring failures
+  // just leave offers unannotated.
+  if (verifiedOffers.length > 0) {
+    try {
+      const { scoreOffer, formatPre } = await import('./triage-score.mjs');
+      for (const o of verifiedOffers) {
+        o.preScore = formatPre(scoreOffer(o, config));
+      }
+    } catch (err) {
+      console.error(`⚠️  pre-triage scoring unavailable: ${err.message}`);
     }
   }
 

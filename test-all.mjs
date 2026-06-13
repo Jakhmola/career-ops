@@ -895,6 +895,24 @@ try {
     fail(`non-string location crashed: ${e.message}`);
   }
 
+  // Case 14b: anchored-remote (2026-06-13). A remote-ish allow token must not
+  // pass locations anchored to a non-allowed place: global boards (e.g.
+  // SmartRecruiters consultancies) emit "City, Region, Country, Remote" for
+  // country-specific remote entities. Unanchored remote/region strings and
+  // NL-anchored remote still pass.
+  if (
+    filter('Madrid, MD, Spain, Remote') === false &&
+    filter('Lisboa, Lisboa, Portugal, Remote') === false &&
+    filter('Tunis, Tunis, Tunisia, Remote') === false &&
+    filter('Remote') === true &&
+    filter('Remote - Europe') === true &&
+    filter('Remote job') === true
+  ) {
+    pass('anchored foreign remote is rejected; unanchored remote still passes');
+  } else {
+    fail(`anchored-remote semantics wrong: Madrid=${filter('Madrid, MD, Spain, Remote')} RemoteEU=${filter('Remote - Europe')}`);
+  }
+
   // Case 15: a malformed location (e.g. legacy object) does NOT bypass block when interpreted naively —
   // the guard returns true (pass) BEFORE block/allow even run, which is correct: scoring/eval happens
   // downstream from the scan filter, so malformed locations should fall through to the manual evaluation
