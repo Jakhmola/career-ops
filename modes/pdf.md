@@ -186,17 +186,9 @@ Want a cover letter for this role too?
 - Or run `/career-ops cover {slug}` later
 ```
 
-If the user says yes, run the full cover letter flow from `modes/cover.md` in slug mode:
-1. Load the existing `## Cover Letter Draft` from the evaluation report as a starting point
-2. Run company research (Step 3 of cover.md)
-3. Present keyword list for confirmation (Step 4)
-4. Surface any gaps (Step 5)
-5. Ask the four prompts: why / problems / approach / tone (Step 6)
-6. Draft in chat, wait for approval (Steps 7-8)
-7. Generate cover letter PDF via `node generate-cover-letter.mjs` (Step 9)
-8. Report both PDF paths
+If the user says yes, run `modes/cover-letter.md` (HTML → `generate-pdf.mjs`, narrative 3-paragraph letter) reusing the CV's identical `{slug}` so the two stay paired. This is the only cover-letter flow the packet uses.
 
-Do not auto-generate the cover letter PDF without going through the interactive steps above.
+(The old bullet-format generator — `modes/cover.md` + `generate-cover-letter.mjs` — has been removed entirely, so the narrative letter is now the only cover-letter flow that exists.)
 
 ## Post-generation
 
