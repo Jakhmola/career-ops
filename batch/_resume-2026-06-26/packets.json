@@ -1,0 +1,552 @@
+[
+  {
+    "num": "1268",
+    "company": "NN Group",
+    "role": "GenAI Engineer - Agentic SWAT",
+    "score": "4.2",
+    "report": "reports/1268-nn-group-2026-06-26.md",
+    "core": "nn-group-1268",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1395",
+    "company": "IBS",
+    "role": "Data Scientist",
+    "score": "4.1",
+    "report": "reports/1395-ibs-2026-06-26.md",
+    "core": "ibs",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1214",
+    "company": "Dura Vermeer Groep",
+    "role": "AI Engineer",
+    "score": "4.0",
+    "report": "reports/1214-dura-vermeer-groep-2026-06-26.md",
+    "core": "dura-vermeer-groep",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1226",
+    "company": "AmPhi Labs",
+    "role": "AI/ML Engineer",
+    "score": "4.0",
+    "report": "reports/1226-amphi-labs-2026-06-26.md",
+    "core": "amphi-labs",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1250",
+    "company": "Opsfleet",
+    "role": "AI Engineer",
+    "score": "4.0",
+    "report": "reports/1250-opsfleet-2026-06-26.md",
+    "core": "opsfleet",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1267",
+    "company": "Rabobank",
+    "role": "Agentic AI Engineer",
+    "score": "4.0",
+    "report": "reports/1267-rabobank-2026-06-26.md",
+    "core": "rabobank",
+    "cvExists": true,
+    "clExists": true
+  },
+  {
+    "num": "1297",
+    "company": "Artsen zonder Grenzen",
+    "role": "Data Engineer",
+    "score": "4.0",
+    "report": "reports/1297-artsen-zonder-grenzen-nederland-2026-06-26.md",
+    "core": "artsen-zonder-grenzen-nederland",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1393",
+    "company": "We Match People (ABN AMRO)",
+    "role": "Senior Data Scientist",
+    "score": "4.0",
+    "report": "reports/1393-we-match-people-2026-06-26.md",
+    "core": "we-match-people",
+    "cvExists": true,
+    "clExists": true
+  },
+  {
+    "num": "1236",
+    "company": "ING Nederland",
+    "role": "Senior Data Engineer - WBAA Discovery Domain",
+    "score": "3.9",
+    "report": "reports/1236-ing-nederland-2026-06-26.md",
+    "core": "ing-nederland",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1327",
+    "company": "dexter health",
+    "role": "AI Engineer (LLM Products) - Remote",
+    "score": "3.9",
+    "report": "reports/1327-dexter-health-2026-06-26.md",
+    "core": "dexter-health-1327",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1334",
+    "company": "dexter health",
+    "role": "Applied AI Engineer - Remote",
+    "score": "3.9",
+    "report": "reports/1334-dexter-health-2026-06-26.md",
+    "core": "dexter-health-1334",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1223",
+    "company": "VARRLYN",
+    "role": "Data Scientist AI",
+    "score": "3.8",
+    "report": "reports/1223-varrlyn-2026-06-26.md",
+    "core": "varrlyn",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1228",
+    "company": "Lummus Technology",
+    "role": "Senior AI Engineer",
+    "score": "3.8",
+    "report": "reports/1228-lummus-technology-2026-06-26.md",
+    "core": "lummus-technology",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1235",
+    "company": "Vivid Resourcing",
+    "role": "Freelance AI Engineer",
+    "score": "3.8",
+    "report": "reports/1235-vivid-resourcing-2026-06-26.md",
+    "core": "vivid-resourcing",
+    "cvExists": true,
+    "clExists": false
+  },
+  {
+    "num": "1251",
+    "company": "DVJ Insights",
+    "role": "Data Platform & AI Engineer",
+    "score": "3.8",
+    "report": "reports/1251-dvj-insights-2026-06-26.md",
+    "core": "dvj-insights",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1252",
+    "company": "Spectrum Search",
+    "role": "Senior Software Engineer - AI Agents",
+    "score": "3.8",
+    "report": "reports/1252-spectrum-search-2026-06-26.md",
+    "core": "spectrum-search",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1257",
+    "company": "GraphAware",
+    "role": "AI Engineer",
+    "score": "3.8",
+    "report": "reports/1257-graphaware-2026-06-26.md",
+    "core": "graphaware",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1282",
+    "company": "Capgemini",
+    "role": "Outcome Deployed Engineering Consultant (AI & Data Platforms) - NL",
+    "score": "3.8",
+    "report": "reports/1282-capgemini-2026-06-26.md",
+    "core": "capgemini",
+    "cvExists": true,
+    "clExists": true
+  },
+  {
+    "num": "1294",
+    "company": "SNI",
+    "role": "Senior FS AI Engineer",
+    "score": "3.8",
+    "report": "reports/1294-sni-2026-06-26.md",
+    "core": "sni",
+    "cvExists": true,
+    "clExists": true
+  },
+  {
+    "num": "1347",
+    "company": "Trimble Inc.",
+    "role": "Senior Agentic AI Engineer",
+    "score": "3.8",
+    "report": "reports/1347-trimble-inc-2026-06-26.md",
+    "core": "trimble-inc",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1232",
+    "company": "Blue Lynx",
+    "role": "Software Engineer LLM Evaluation",
+    "score": "3.7",
+    "report": "reports/1232-blue-lynx-2026-06-26.md",
+    "core": "blue-lynx",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1262",
+    "company": "Darktrace",
+    "role": "Data Engineer",
+    "score": "3.7",
+    "report": "reports/1262-darktrace-2026-06-26.md",
+    "core": "darktrace",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1263",
+    "company": "DHD",
+    "role": "Data Scientist",
+    "score": "3.7",
+    "report": "reports/1263-dhd-2026-06-26.md",
+    "core": "dhd",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1285",
+    "company": "CoreView",
+    "role": "AI Machine Learning Engineer",
+    "score": "3.7",
+    "report": "reports/1285-coreview-2026-06-26.md",
+    "core": "coreview",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1287",
+    "company": "SPARETECH",
+    "role": "AI Automation Engineer",
+    "score": "3.7",
+    "report": "reports/1287-sparetech-2026-06-26.md",
+    "core": "sparetech",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1288",
+    "company": "NineTwoThree AI Studio",
+    "role": "ML Engineer (Applied AI)",
+    "score": "3.7",
+    "report": "reports/1288-ninetwothree-ai-studio-2026-06-26.md",
+    "core": "ninetwothree-ai-studio",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1331",
+    "company": "inventYOU IT Consulting",
+    "role": "Senior AI Engineer",
+    "score": "3.7",
+    "report": "reports/1331-inventyou-it-consulting-2026-06-26.md",
+    "core": "inventyou-it-consulting",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1340",
+    "company": "Fever",
+    "role": "Senior Software Engineer - AI Platform",
+    "score": "3.7",
+    "report": "reports/1340-fever-2026-06-26.md",
+    "core": "fever",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1391",
+    "company": "Next Lead",
+    "role": "Senior Data Engineer",
+    "score": "3.7",
+    "report": "reports/1391-next-lead-2026-06-26.md",
+    "core": "next-lead",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1394",
+    "company": "NN Group",
+    "role": "Data Scientist",
+    "score": "3.7",
+    "report": "reports/1394-nn-group-2026-06-26.md",
+    "core": "nn-group-1394",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1277",
+    "company": "Jobster",
+    "role": "Machine Learning Scientist Jobbird.com",
+    "score": "3.6",
+    "report": "reports/1277-jobster-2026-06-26.md",
+    "core": "jobster",
+    "cvExists": true,
+    "clExists": true
+  },
+  {
+    "num": "1302",
+    "company": "EPAM Systems",
+    "role": "Senior AI Engineer",
+    "score": "3.6",
+    "report": "reports/1302-epam-systems-2026-06-26.md",
+    "core": "epam-systems",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1317",
+    "company": "Haystack People",
+    "role": "Data Engineer - Energy Tech Organisatie",
+    "score": "3.6",
+    "report": "reports/1317-haystack-people-2026-06-26.md",
+    "core": "haystack-people",
+    "cvExists": true,
+    "clExists": false
+  },
+  {
+    "num": "1333",
+    "company": "CrewHarbor S.R.L.",
+    "role": "Senior AI Engineer and Python Developer",
+    "score": "3.6",
+    "report": "reports/1333-crewharbor-s-r-l-2026-06-26.md",
+    "core": "crewharbor-s-r-l",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1349",
+    "company": "Sngular",
+    "role": "Senior Machine Learning Engineer (Demand Forecasting)",
+    "score": "3.6",
+    "report": "reports/1349-sngular-2026-06-26.md",
+    "core": "sngular",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1388",
+    "company": "LanceSoft Europe",
+    "role": "Senior GenAI Engineer",
+    "score": "3.6",
+    "report": "reports/1388-lancesoft-europe-2026-06-26.md",
+    "core": "lancesoft-europe",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1212",
+    "company": "ING",
+    "role": "Senior Data Scientist",
+    "score": "3.5",
+    "report": "reports/1212-ing-2026-06-26.md",
+    "core": "ing",
+    "cvExists": true,
+    "clExists": true
+  },
+  {
+    "num": "1219",
+    "company": "Harnham",
+    "role": "Machine Learning/ML Ops Engineer",
+    "score": "3.5",
+    "report": "reports/1219-harnham-2026-06-26.md",
+    "core": "harnham",
+    "cvExists": true,
+    "clExists": true
+  },
+  {
+    "num": "1220",
+    "company": "Protolabs",
+    "role": "Senior Machine Learning Engineer",
+    "score": "3.5",
+    "report": "reports/1220-protolabs-2026-06-26.md",
+    "core": "protolabs",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1229",
+    "company": "MarketingConcurrent",
+    "role": "AI Automation Engineer",
+    "score": "3.5",
+    "report": "reports/1229-marketingconcurrent-2026-06-26.md",
+    "core": "marketingconcurrent",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1240",
+    "company": "Avanade",
+    "role": "Junior AI Engineer - Based in Netherlands",
+    "score": "3.5",
+    "report": "reports/1240-avanade-2026-06-26.md",
+    "core": "avanade",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1243",
+    "company": "Elektramat B.V.",
+    "role": "AI Engineer",
+    "score": "3.5",
+    "report": "reports/1243-elektramat-b-v-2026-06-26.md",
+    "core": "elektramat-b-v",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1265",
+    "company": "Sijthoff Media",
+    "role": "Process Automation & AI Specialist",
+    "score": "3.5",
+    "report": "reports/1265-sijthoff-media-2026-06-26.md",
+    "core": "sijthoff-media",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1275",
+    "company": "Sprint and Partners",
+    "role": "Senior Data Scientist Experimentation and Statistical Innovation Platform",
+    "score": "3.5",
+    "report": "reports/1275-sprint-and-partners-2026-06-26.md",
+    "core": "sprint-and-partners",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1281",
+    "company": "New Black",
+    "role": "Data Engineer",
+    "score": "3.5",
+    "report": "reports/1281-new-black-2026-06-26.md",
+    "core": "new-black",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1289",
+    "company": "Ciklum Czech Republic Slovakia",
+    "role": "Senior AI/ML Engineer",
+    "score": "3.5",
+    "report": "reports/1289-ciklum-czech-republic-slovakia-2026-06-26.md",
+    "core": "ciklum-czech-republic-slovakia",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1308",
+    "company": "QAVION GROUP",
+    "role": "Senior AI / ML / Data Engineer (m/w/d)",
+    "score": "3.5",
+    "report": "reports/1308-qavion-group-2026-06-26.md",
+    "core": "qavion-group",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1315",
+    "company": "NATO NCIA",
+    "role": "Data Engineer",
+    "score": "3.5",
+    "report": "reports/1315-nato-communications-and-information-agency-ncia-2026-06-26.md",
+    "core": "nato-communications-and-information-agency-ncia",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1318",
+    "company": "Jimmy Technologies",
+    "role": "Senior FullStack AI Engineer",
+    "score": "3.5",
+    "report": "reports/1318-jimmy-technologies-2026-06-26.md",
+    "core": "jimmy-technologies",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1319",
+    "company": "XM",
+    "role": "Senior AI Engineer",
+    "score": "3.5",
+    "report": "reports/1319-xm-2026-06-26.md",
+    "core": "xm",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1352",
+    "company": "Nagarro",
+    "role": "LLM Engineer",
+    "score": "3.5",
+    "report": "reports/1352-nagarro-2026-06-26.md",
+    "core": "nagarro-1352",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1365",
+    "company": "Code Compass",
+    "role": "AI Engineer - Würzburg",
+    "score": "3.5",
+    "report": "reports/1365-code-compass-2026-06-26.md",
+    "core": "code-compass",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1368",
+    "company": "Nagarro",
+    "role": "Python Developer GenAI and Agentic AI",
+    "score": "3.5",
+    "report": "reports/1368-nagarro-2026-06-26.md",
+    "core": "nagarro-1368",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1370",
+    "company": "Latent AI",
+    "role": "Data Scientist - Europe",
+    "score": "3.5",
+    "report": "reports/1370-latent-ai-2026-06-26.md",
+    "core": "latent-ai",
+    "cvExists": false,
+    "clExists": false
+  },
+  {
+    "num": "1384",
+    "company": "Lingaro",
+    "role": "Senior AI/ML Engineer",
+    "score": "3.5",
+    "report": "reports/1384-lingaro-2026-06-26.md",
+    "core": "lingaro",
+    "cvExists": false,
+    "clExists": false
+  }
+]

@@ -3,9 +3,12 @@ cv.md
 article-digest.md
 data/applications.md
 data/applications.md.bak
+data/applications.db
+data/follow-ups.md
 data/pipeline.md
 data/scan-history.tsv
 data/api-usage.tsv
+data/pdf-index.tsv
 # Generated scan / prefilter output (personal)
 data/filter-stats.md
 data/pipeline-filtered.md
@@ -28,6 +31,25 @@ batch/tracker-additions/**/*.tsv
 jds/*
 !jds/.gitkeep
 
+# Personal documents — never commit scans or copies of these (PII).
+# Catches common identity/credential filenames so they can't be staged by accident.
+*passport*
+*diploma*
+*简历*
+*学位*
+*成绩单*
+
+# Interview prep (accumulated STAR+R stories — user data)
+interview-prep/*
+!interview-prep/
+!interview-prep/.gitkeep
+# Session transcripts hold real interviewer names/companies — ignore content,
+# ship only the system-owned scaffold (README + .gitkeep). #1242
+!interview-prep/sessions/
+interview-prep/sessions/*
+!interview-prep/sessions/.gitkeep
+!interview-prep/sessions/README.md
+
 # Writing samples (user's personal files — never committed)
 writing-samples/*
 !writing-samples/README.md
@@ -37,14 +59,25 @@ config/profile.yml
 portals.yml
 portals.yml.bak
 modes/_profile.md
+modes/_custom.md
 .update-dismissed
 .update-lock
+
+# Plugin layer — opt-in toggles + user-installed plugins + integrity lock (never auto-updated)
+config/plugins.yml
+plugins.local/
+plugins.lock
 
 # Secrets (never commit — use .env.example as template)
 .env
 # Authenticated LinkedIn session cookie — a live login token, treat like a password
 linkedin-storage-state.json
 *storage-state.json
+# Universal safety net — protects ALL checkouts/branches, incl. untracked subprojects
+# (e.g. web/ before it graduates to main). Never commit local env files or TS build caches.
+**/.env.local
+**/.env*.local
+**/*.tsbuildinfo
 
 # Generated
 .resolved-prompt-*
@@ -62,18 +95,25 @@ venv/
 __pycache__/
 *.pyc
 
+# OpenRouter runner — generated data (personal, never commit)
+data/model-blacklist.json
+
 # OS
 .DS_Store
 *.mov
 *.mp4
 
-# Claude Code local
+# CLI-specific local config
 .claude/settings.local.json
 .claude/memory/
+.opencode/settings.local.json
+.opencode/memory/
 career-dashboard
+career-dashboard.exe
 package-lock.json
+!web/package-lock.json
 
-# Playwright MCP server run artifacts (ephemeral, machine-local — never commit)
+# Playwright MCP server run artifacts (ephemeral, machine-local)
 .playwright-mcp/
 
 # Planning (local scratchpad)

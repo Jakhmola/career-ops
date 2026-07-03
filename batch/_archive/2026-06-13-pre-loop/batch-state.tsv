@@ -1,0 +1,82 @@
+id	url	status	started_at	completed_at	report_num	score	error	retries
+1	https://job-boards.greenhouse.io/wolt/jobs/6881871	completed	2026-06-09T18:27:04Z	2026-06-09T18:34:18Z	341	2.5	-	0
+2	https://careers.wolt.com/en/jobs/data-scientist-support-(genai)/42725e2	completed	2026-06-09T18:27:04Z	2026-06-09T18:35:46Z	342	2.5	-	0
+3	https://jobs.ashbyhq.com/sana-roles/d5fd55a8-dc57-44da-995c-b063411881d8	completed	2026-06-09T18:34:20Z	2026-06-09T18:43:51Z	343	3.6	-	0
+4	https://jobs.ashbyhq.com/granola/ed52eb55-cb81-4ed8-b97b-92b477876f9e	completed	2026-06-09T18:35:47Z	2026-06-09T18:47:23Z	344	3.8	-	0
+5	https://helsing.ai/jobs/4678205101	completed	2026-06-09T18:43:53Z	2026-06-09T18:55:20Z	345	2.7	-	0
+6	https://careers.nordea.com/job/Stockholm-Data-Scientist-Generative-AI-LLM-111-46/1228441801/	completed	2026-06-09T18:47:25Z	2026-06-09T18:55:11Z	346	1.5	-	0
+7	https://kyutai.homerun.co/technical-staff	completed	2026-06-09T18:55:12Z	2026-06-09T19:01:28Z	348	2.2	-	0
+8	https://jobs.lever.co/qonto	completed	2026-06-09T18:55:22Z	2026-06-09T19:02:53Z	349	3.2	-	0
+9	https://boards.greenhouse.io/telnyx54/jobs/5785266003	completed	2026-06-09T19:01:30Z	2026-06-09T19:08:38Z	350	2.6	-	0
+10	https://www.welcometothejungle.com/en/companies/nabla/jobs/machine-learning-engineer_paris_NABLA_V7oGaQk	completed	2026-06-09T19:02:55Z	2026-06-09T19:11:08Z	351	3.1	-	0
+11	https://poolside.ai/careers/member-of-engineering-evaluations-engineering--df54a608-9fd9-4c09-aad1-7de71a0d487e	completed	2026-06-09T19:08:39Z	2026-06-09T19:14:40Z	352	3.5	-	0
+12	https://jobs.lever.co/aircall/38f0617f-7a28-4381-9377-cae4827a3cd1	completed	2026-06-09T19:11:10Z	2026-06-09T19:20:49Z	353	2.0	-	0
+13	https://www.welcometothejungle.com/en/companies/mirakl/jobs/junior-ai-engineer_paris	completed	2026-06-09T19:14:41Z	2026-06-09T19:21:34Z	354	3.1	-	0
+14	https://jobs.ashbyhq.com/owkin/9d054242-7609-4089-b292-5b541cf8b182	completed	2026-06-09T19:20:51Z	2026-06-09T19:26:47Z	355	2.3	-	0
+15	https://jobs.ashbyhq.com/taxfix.com/8f33e17f-03d4-40df-9f21-3ea521fd5d61	completed	2026-06-09T19:21:36Z	2026-06-09T19:27:57Z	356	3.2	-	0
+16	https://jobs.lever.co/quantco-/67757fe8-3582-4bdd-aa7d-98fa490bde84	completed	2026-06-09T19:26:49Z	2026-06-09T19:33:49Z	357	3.7	-	0
+17	https://jobs.lever.co/quantco-/3e18574e-ab5a-46a2-8714-a0221fb937e7	completed	2026-06-09T19:27:59Z	2026-06-09T19:34:31Z	358	3.0	-	0
+18	https://n26.com/en-eu/careers/positions/7317034	completed	2026-06-09T19:33:51Z	2026-06-09T19:40:14Z	359	3.5	-	0
+19	https://jobs.ashbyhq.com/synthflow/2ec277c9-3ceb-4c58-ae3f-ca674da59b0c	completed	2026-06-09T19:34:32Z	2026-06-09T19:42:08Z	360	3.0	-	0
+20	https://job-boards.greenhouse.io/blackforestlabs/jobs/4132217008	completed	2026-06-09T19:40:15Z	2026-06-09T19:44:55Z	361	1.8	-	0
+21	https://jobviewtrack.com/v2/Ufxttr8Ta4CvgY4B9izc04P-xlIopsQGJ49Yi9eTZmixoOgXjP9OrYa23rP_eV7yfp4TY3PU1tRlfFNeZhJAc9hjsGbUtUiS_bT3gec3iHPCtcEmgTRCFAwwGAbSdZPHtsy0IsvrZ4tHujvU50-M4l2UDWFM3Hsk3mrrO68PAcZdudRnfriz9GZvyEFqbEHZ7zxkrn4JXm8hw3k7Nbr6x_Q3aFbl08mDvfL2pQGfDNw	completed	2026-06-09T19:42:10Z	2026-06-09T19:48:54Z	362	3.1	-	0
+22	https://jobviewtrack.com/v2/R5LM3JoiJqwbYTViEFwGa5ggz7Z2skKTjiMvB31gTE25vbMCMQ8jP5DBtT5duodiulJRsdY50IgEXv-a3zTSnsHx1iMLD9k52-tnO3BHt8UUYe-sK_V3C4rgj3BHreeZwNYc3yGV1tgYbHtgRcJ9VVsAJFszCzJJKEJHiXnZg6IzM_c9KskSRiB42a1G1vMwgPJg4o6wcxsDmcau7abw274XSYaAsQGTEKeyB1pjWjQ	completed	2026-06-09T19:44:57Z	2026-06-09T19:46:47Z	363	2.2	-	0
+23	https://jobviewtrack.com/v2/ckaUQIV4ArLylTe9p3sv7DtJnKn007K2j8akGiI79LxghkX-1kXLDRS0Ol__H4N7C4bfybT4fRAIhsOXTBbygIDBFXKzWzjCwL7UuSvKa2O6pn8JDAM12qWjqYbATPg-i_WnYmdHdtMOUyCW5_to2XXYvx1YWXwlsSm4CrSIDjIAc0NMvuoVymLlvIepxvJzJSkNy_YqlyjAWnZZHp-8FJDIIJDsjok_uGA6fJ7xqFo	completed	2026-06-09T19:46:48Z	2026-06-09T19:55:27Z	364	1.5	-	0
+24	https://jobviewtrack.com/v2/Gp_QuhY833QijHr13hDYiRgyxgywaN2V2bTeRSZ0uENmbFU_fsM2_IIh-XptGK1-JHFXKXPDQvhoKIdc-615Oy8-o4TsOUpStYEZ5gBZ4Gtrzxm5647I64uxXJoNwfaGCrc-Vx2euEEIUnzuGOBA5SpaqHe_7LYLMskvVY4b5cLG_65PDFGL6m5V1dA7k5qShInfXqHoV8tGVurh19i_T-h15WZw70ev9bObBiq2img	completed	2026-06-09T19:48:55Z	2026-06-09T19:54:14Z	365	3.2	-	0
+25	https://jobviewtrack.com/v2/LNI0VchgNtSpKmf-eEwaigqCsUf600_7kMm_PSlUafQ8_vzmMFG5y8AUOXqJhd4D-hU8nE6Ja9UwG5DUITUay0tsbM0SV58woEyiSKmJYe4001ADCHDRvx6-RxeQWcvng4CmwTxHi1pSs6VfWyKWp1XFxKcNOyUzEShHZKdajsE6xpEdDvnt9rmPYSCRep5wJwGDGZZ8LqoTkVGwoBh7riJkqFiAHviWGB0VHqRI0Jk	completed	2026-06-09T19:54:16Z	2026-06-09T20:02:46Z	366	3.0	-	0
+26	https://jobviewtrack.com/v2/-pW58Mgy-TxzdaLbD7nXqBMZln5FFbmGXhqgcWqG74vaaf948KdJQLgYf7auOwKiJtnvAb8jg11YHrzLo3O_7NybItlOsO0u-x4by-40m4dcN4e4i5ukPdhbo0YBbMvdAfZ80syHM-OJImLCUve6p3q1NSXqB4kCzIoOp-ZWDukL0iHCV0FjyFRAWLALrpVOlFiDfUR5A6stg7Vo9TLYs2p2jdqwUk9JxjoXS32iYPU	completed	2026-06-09T19:55:29Z	2026-06-09T20:01:36Z	367	1.5	-	0
+27	https://jobviewtrack.com/v2/DCP17Ry-UkbjnO2KFQNHseRv1yxXkbMnvkgcg7l3Aqat-p_UmfeumcousCKUdK3Agx_b4j70ZFvyvJuUXsrGioq-5bWtti8wE-ZNyoc6Vy6k3tM1cNsFHNjnsEr9cOS3yO3HUL18gc4BYMjeWXb08Zjmsxp6qjm4JL7Y1mvnderxvX8ZASwOeZD05dbbQcJ4kap0_DdbdUfqyZ-5Iao3hpO96_nPxI7RIBgsZ9l74eE	completed	2026-06-09T20:01:37Z	2026-06-09T20:08:42Z	368	2.4	-	0
+28	https://jobviewtrack.com/v2/yRNzj0x3SERdQOtFCyng65_aegJnKXxM8EQrf0MqaBRyH6DNidxqwMyx1f4XLVB1vtzY1Tm6X-c29ldkI6nJJJskDUdebrDF3lDB9oj2zmIO5CoFyJcNr0mN-1Ud59qsDIPJpCxwLUu_Khq2pnh97rsSbJt5Qzn73lX8Ke3e--GoWimu6yb6zgHMJo1jIX1ZetyuOrwf3MoH8OpGNJQA9IkLga_T11_SmBd_-0fn-hs	completed	2026-06-09T20:02:48Z	2026-06-09T20:07:14Z	369	1.0	-	0
+29	https://jobviewtrack.com/v2/rPlERiyLA2o0J5z3vP1ZifkK10oGBICA_YxsbfcHEaTAN5rWvKnJjKGtatUp6OdoHgpkE2nDhhsTigZXdTphbTAHMkOfZrMaRaHb6jQlFBf35f3y56Wu3XqIjrZ6MC8qWTYQcDMdWHi-BEykmjPDnqdxEDWYnUqx-jtsTTPTxfwy8__qfe3jTDaGiWkHIO21DwZDwHxQskiqF7wbbBtEPs7fTcTMlRQpLBOoywUmHm0	completed	2026-06-09T20:07:15Z	2026-06-09T20:13:48Z	370	1.5	-	0
+30	https://jobviewtrack.com/v2/CQNNNwyqnvImm3LiL0MusL0b--eLZG8Zt-txr2aSFl1gpT_sgJROS70OfbbQR8gMRjpj70tFTynZrE-BtXXWUpbCKA6h6oI4nqTnBqe7Yr26J2LffQ390qJ6SNweqzmmpd3UrNkT6uIfGAbZqTDFM8XMPrD-L6iPH2ExJET2OoG5NNXbpXszA5Gd04F1xKmtjvg87aibne2Ivdf0czFhkHxq24q3QGWf5cNUgcfDfII	completed	2026-06-09T20:08:43Z	2026-06-09T20:14:20Z	371	1.5	-	0
+31	https://jobviewtrack.com/v2/Dm4AmtFj4dqp2QR_h2EVEETsn1URKP5W6W2DEFhuXbLb3YP0oU99E7AuQK6N29vwdeo1i6tfzD9FOFq_AkW_n1t722mKqZe3ZfvkhNVp62hmSSh9XAI88wd7_K4i6u0usKM6SzRN6eH1lb--Ex8ZGepBvnygERjbJyHzgd8JF43SSH11OWozrhvV_nSxbS7_-WDX_z_G3KWshbajMc9ce32h9UEWj_RrPAkLdAjFZyI	completed	2026-06-09T20:13:50Z	2026-06-09T20:17:05Z	372	1.5	-	0
+32	https://jobviewtrack.com/v2/L5mN8zKdBosgJgT9NOUHI8dJq-mJHfloXUuV-tN-n7sD51FGhk9ZIYco4g1s30wOkJ-_kchSMu1bYuuhdf8v9YYmBA8hDCm0ywLGDvZsGZtPALSdvTn4nABLx_WVKuJJ0aUhW-ArcNa0Zl_1JWkgLwGJka1u5XCBmrjjZaH4d6i5fgMgFhrUVI2HLu6btYxUl-Wj4r-PM_5VngwUvhy9uWaeHtehVmYuHiUY4h4TSiU	completed	2026-06-09T20:14:22Z	2026-06-09T20:18:45Z	373	1.5	-	0
+33	https://www.optimadata.nl/vacatures/ai-agent-engineer-ah-xeqrao_HESyo4/	completed	2026-06-09T20:17:06Z	2026-06-09T20:24:38Z	374	1.0	-	0
+34	https://funle.nl/opdrachten/data-scientist-ai-agents_2cf9c	completed	2026-06-09T20:18:46Z	2026-06-09T20:23:56Z	375	1.5	-	0
+35	https://www.werkzoeken.nl/vacature/15662619-junior-medior-ai-engineer-scale-up-eur67000-agentic-ai-genai-ai-libraries/	completed	2026-06-09T20:23:58Z	2026-06-09T20:30:52Z	376	1.0	-	0
+36	local:jds/cegeka-ai-engineer.md	completed	2026-06-09T20:24:40Z	2026-06-09T20:27:17Z	377	1.5	-	0
+37	local:jds/delft-university-of-technology-applied-ai-engineer.md	completed	2026-06-09T20:27:18Z	2026-06-09T20:34:00Z	378	3.8	-	0
+38	local:jds/vbeyond-corporation-ai-architect.md	completed	2026-06-09T20:30:53Z	2026-06-09T20:36:30Z	379	2.5	-	0
+39	local:jds/kyndryl-ai-agent-developer.md	completed	2026-06-10T01:00:32Z	2026-06-10T01:02:47Z	423	3.5	-	1
+40	local:jds/deeploy-implementation-engineer-ai-governance.md	completed	2026-06-09T20:36:31Z	2026-06-09T20:38:08Z	381	1.0	-	0
+41	local:jds/bol-ai-platform-engineer.md	completed	2026-06-10T01:00:32Z	2026-06-10T01:04:55Z	424	3.4	-	1
+42	local:jds/ilionx-healthcare-ai-engineer.md	completed	2026-06-10T01:00:32Z	2026-06-10T01:03:44Z	425	1.5	-	1
+43	local:jds/vibe-academy-junior-ai-engineer.md	completed	2026-06-10T01:02:49Z	2026-06-10T01:06:44Z	426	1.8	-	1
+44	local:jds/iq-staffing-machine-learning-engineer-ai.md	completed	2026-06-10T01:03:46Z	2026-06-10T01:08:29Z	427	2.8	-	1
+45	local:jds/fellowmind-ai-engineer.md	completed	2026-06-10T01:04:56Z	2026-06-10T01:08:36Z	428	1.5	-	1
+46	local:jds/cribconnects-ai-engineer.md	completed	2026-06-10T01:06:46Z	2026-06-10T01:09:57Z	429	1.5	-	1
+47	local:jds/brainbay-junior-data-scientist.md	completed	2026-06-10T01:08:30Z	2026-06-10T01:11:38Z	430	1.0	-	1
+48	local:jds/levy-search-ai-data-scientist.md	completed	2026-06-10T01:08:37Z	2026-06-10T01:11:20Z	431	1.0	-	1
+49	local:jds/igh-medior-data-scientist.md	completed	2026-06-10T01:09:58Z	2026-06-10T01:13:15Z	432	1.5	-	1
+50	local:jds/action-data-scientist-operations-research.md	completed	2026-06-10T01:11:22Z	2026-06-10T01:14:31Z	433	2.0	-	1
+51	local:jds/atos-mid-level-ai-engineer.md	completed	2026-06-10T01:11:40Z	2026-06-10T01:16:27Z	434	1.0	-	1
+52	local:jds/imc-trading-machine-learning-engineer.md	completed	2026-06-10T01:13:16Z	2026-06-10T01:16:39Z	435	2.0	-	1
+53	local:jds/corendon-data-scientist.md	completed	2026-06-10T01:14:33Z	2026-06-10T01:17:33Z	436	1.0	-	1
+54	local:jds/tesla-associate-engineer-automation-and-ai-tools-industrial-energy-emea.md	completed	2026-06-10T01:16:28Z	2026-06-10T01:21:41Z	437	3.6	-	1
+55	local:jds/certify360-edtech-group-ai-builder-procesoptimalisatie-backoffice.md	completed	2026-06-10T01:16:40Z	2026-06-10T01:19:43Z	438	1.8	-	1
+56	local:jds/certify360-edtech-group-junior-data-ai-engineer.md	completed	2026-06-10T01:17:34Z	2026-06-10T01:20:26Z	439	1.0	-	1
+57	local:jds/amsterdam-data-collective-consultant-data-engineer.md	completed	2026-06-10T01:19:44Z	2026-06-10T01:24:08Z	440	3.3	-	1
+58	local:jds/xebia-fabric-data-engineer-cross-skilling-program.md	completed	2026-06-10T01:20:27Z	2026-06-10T01:24:59Z	441	3.0	-	1
+59	local:jds/surf-teamhoofd-high-performance-machine-learning.md	completed	2026-06-10T01:21:43Z	2026-06-10T01:25:38Z	442	1.0	-	1
+60	local:jds/nn-group-vacature-servicenow-developer-risk-security-ai-governance-view-vacancy.md	completed	2026-06-10T01:24:10Z	2026-06-10T01:26:57Z	443	1.5	-	1
+61	local:jds/strukton-ai-specialist.md	completed	2026-06-10T01:25:01Z	2026-06-10T01:28:32Z	444	1.0	-	1
+62	local:jds/ictrecht-jurist-gezondheidsrecht-technologie-ai.md	completed	2026-06-10T01:25:40Z	2026-06-10T01:27:46Z	445	1.0	-	1
+63	local:jds/rijksvastgoedbedrijf-rvb-coordinator-ai-governance-innovatie.md	completed	2026-06-10T01:26:58Z	2026-06-10T01:30:03Z	446	1.3	-	1
+64	local:jds/apg-devops-engineer-self-service-data-science.md	completed	2026-06-10T01:27:47Z	2026-06-10T01:30:17Z	447	1.0	-	1
+65	local:jds/project-interim-advies-adviseur-ai-strategie-24-32-uur.md	completed	2026-06-10T01:28:34Z	2026-06-10T01:31:23Z	448	1.0	-	1
+66	local:jds/ing-data-scientist-business-banking-nl.md	completed	2026-06-10T01:30:04Z	2026-06-10T01:34:40Z	449	3.5	-	1
+67	local:jds/rotterdam-world-gateway-rwg-data-scientist.md	completed	2026-06-10T01:30:19Z	2026-06-10T01:33:54Z	450	1.5	-	1
+68	local:jds/imc-machine-learning-engineer.md	completed	2026-06-10T01:31:24Z	2026-06-10T01:34:03Z	451	2.0	-	1
+69	https://www.werk.nl/nl/vacatures/69556220	completed	2026-06-10T01:33:55Z	2026-06-10T01:34:45Z	452	-	-	1
+70	https://www.werk.nl/nl/vacatures/69706282	completed	2026-06-10T01:34:05Z	2026-06-10T01:35:06Z	453	-	-	1
+71	https://jobs.ashbyhq.com/scale%20army%20careers/f1afb5ab-24e7-4ff6-99e5-f0cb3794a3ae	completed	2026-06-10T01:34:42Z	2026-06-10T01:38:43Z	454	1.5	-	1
+72	https://jobs.ashbyhq.com/aim4hire/8e955fa6-9164-483d-a190-33520c9b9250	completed	2026-06-10T01:34:47Z	2026-06-10T01:38:45Z	455	2.0	-	1
+73	https://euremotejobs.com/job/ai-software-solutions-architect-remote-contract-2/	completed	2026-06-10T01:35:08Z	2026-06-10T01:40:06Z	456	2.8	-	2
+74	https://jobs.ashbyhq.com/reflow/cd4b3752-b07d-4c33-acb3-169a3562d71a	failed	2026-06-10T01:38:45Z	2026-06-10T01:39:04Z	457	-	You've hit your session limit · resets 5:30am (Europe/Amsterdam) 	2
+75	https://jobs.ashbyhq.com/eigen-labs/c02fa001-23c9-4d68-8c0a-e27a742d76a4	failed	2026-06-10T01:38:47Z	2026-06-10T01:38:57Z	458	-	You've hit your session limit · resets 5:30am (Europe/Amsterdam) 	2
+76	https://job-boards.greenhouse.io/dv01/jobs/8416034002	failed	2026-06-10T01:38:58Z	2026-06-10T01:39:01Z	459	-	You've hit your session limit · resets 5:30am (Europe/Amsterdam) 	2
+77	https://www.workatastartup.com/jobs/89099	failed	2026-06-10T01:39:02Z	2026-06-10T01:39:05Z	460	-	You've hit your session limit · resets 5:30am (Europe/Amsterdam) 	2
+78	https://www.workatastartup.com/jobs/94746	failed	2026-06-10T01:39:05Z	2026-06-10T01:39:08Z	461	-	You've hit your session limit · resets 5:30am (Europe/Amsterdam) 	2
+79	https://www.workatastartup.com/jobs/85043	failed	2026-06-10T01:39:06Z	2026-06-10T01:39:09Z	462	-	You've hit your session limit · resets 5:30am (Europe/Amsterdam) 	2
+80	https://www.workatastartup.com/jobs/80475	failed	2026-06-10T01:39:10Z	2026-06-10T01:39:13Z	463	-	You've hit your session limit · resets 5:30am (Europe/Amsterdam) 	2
+81	https://www.workatastartup.com/jobs/86442	failed	2026-06-10T01:39:11Z	2026-06-10T01:39:14Z	464	-	You've hit your session limit · resets 5:30am (Europe/Amsterdam) 	2

@@ -1,0 +1,34 @@
+[
+  {
+    "num": "1250",
+    "company": "Opsfleet",
+    "role": "AI Engineer",
+    "score": "4.0",
+    "report": "reports/1250-opsfleet-2026-06-26.md",
+    "core": "opsfleet"
+  },
+  {
+    "num": "1297",
+    "company": "Artsen zonder Grenzen",
+    "role": "Data Engineer",
+    "score": "4.0",
+    "report": "reports/1297-artsen-zonder-grenzen-nederland-2026-06-26.md",
+    "core": "artsen-zonder-grenzen-nederland"
+  },
+  {
+    "num": "1236",
+    "company": "ING Nederland",
+    "role": "Senior Data Engineer - WBAA Discovery Domain",
+    "score": "3.9",
+    "report": "reports/1236-ing-nederland-2026-06-26.md",
+    "core": "ing-nederland"
+  },
+  {
+    "num": "1327",
+    "company": "dexter health",
+    "role": "AI Engineer (LLM Products) - Remote",
+    "score": "3.9",
+    "report": "reports/1327-dexter-health-2026-06-26.md",
+    "core": "dexter-health-1327"
+  }
+]

@@ -1,0 +1,122 @@
+{
+  "group": "group4",
+  "wave": "wave1",
+  "date": "2026-06-30",
+  "worker": "batch-agent",
+  "total_jds": 10,
+  "language_blocked": 2,
+  "evaluated": 8,
+  "leads_above_4": 2,
+  "results": [
+    {
+      "num": 1409,
+      "company": "N/A (Unknown)",
+      "role": "Senior Azure Data Engineer (Python | Databricks | Azure | Terraform)",
+      "score": 2.5,
+      "archetype": "Data Engineer (adjacent)",
+      "location": "Eindhoven, NL",
+      "status": "Evaluated",
+      "report": "reports/1409-company-senior-azure-data-engineer-2026-06-30.md",
+      "notes": "Thin JD; Terraform+K8s hard blockers; senior level; adjacent archetype"
+    },
+    {
+      "num": 1410,
+      "company": "Blue Lynx",
+      "role": "Software Engineer, LLM Evaluation",
+      "score": 3.2,
+      "archetype": "AI/LLM Engineer (primary)",
+      "location": "Nederland",
+      "status": "Evaluated",
+      "report": "reports/1410-blue-lynx-software-engineer-llm-evaluation-2026-06-30.md",
+      "notes": "Thin JD via recruiter; strong eval match; pretraining gap; unknown end client"
+    },
+    {
+      "num": 1412,
+      "company": "STAFIDE",
+      "role": "Vulnerability Management Engineer LLM & AI Security",
+      "score": 1.5,
+      "archetype": "Security Engineer (not target)",
+      "location": "Amsterdam, NL",
+      "status": "Evaluated",
+      "report": "reports/1412-stafide-vulnerability-management-engineer-2026-06-30.md",
+      "notes": "Cybersecurity domain; no vulnerability management background; wrong archetype"
+    },
+    {
+      "num": 1413,
+      "company": "CGI Nederland",
+      "role": "Senior Databricks & AI Platform Engineer",
+      "score": 1.0,
+      "archetype": "Data Engineer (adjacent)",
+      "location": "The Randstad, NL",
+      "status": "SKIP",
+      "report": "reports/1413-cgi-nederland-senior-databricks-ai-platform-engineer-2026-06-30.md",
+      "notes": "LANGUAGE BLOCK: native Dutch speaker required (explicit in posting)"
+    },
+    {
+      "num": 1414,
+      "company": "Yarado",
+      "role": "RPA & AI Developer (Junior/Medior)",
+      "score": 1.0,
+      "archetype": "RPA Developer (not target)",
+      "location": "The Randstad, NL",
+      "status": "SKIP",
+      "report": "reports/1414-yarado-rpa-ai-developer-2026-06-30.md",
+      "notes": "LANGUAGE BLOCK: fluent Dutch required (Wat wel vereist is section); RPA archetype mismatch"
+    },
+    {
+      "num": 1415,
+      "company": "Robert Vint (client: international digital learning org)",
+      "role": "Software Engineer AI",
+      "score": 4.2,
+      "archetype": "AI/LLM Engineer (primary)",
+      "location": "Utrecht, NL",
+      "status": "Evaluated",
+      "report": "reports/1415-robert-vint-software-engineer-ai-2026-06-30.md",
+      "notes": "LEAD: AI CoE from scratch; RAG/eval/monitoring exact match; up to EUR 90K; mild seniority stretch"
+    },
+    {
+      "num": 1416,
+      "company": "Medendo",
+      "role": "AI & Data Specialist",
+      "score": 4.3,
+      "archetype": "AI/LLM Engineer (primary)",
+      "location": "Utrecht, NL",
+      "status": "Evaluated",
+      "report": "reports/1416-medendo-ai-data-specialist-2026-06-30.md",
+      "notes": "TOP PICK: eval-first LLM role; EUR 70-100K + SARs; healthcare AI; GCP quick ramp only gap"
+    },
+    {
+      "num": 1417,
+      "company": "Philips",
+      "role": "AI Solution Architect (Contract)",
+      "score": 2.5,
+      "archetype": "AI Architect (not primary)",
+      "location": "Eindhoven, NL",
+      "status": "Evaluated",
+      "report": "reports/1417-philips-ai-solution-architect-2026-06-30.md",
+      "notes": "8-10+ yrs required; advisory/coaching not building; 12-month contract via Randstad"
+    },
+    {
+      "num": 1418,
+      "company": "Amazon",
+      "role": "AI Language Engineer, AGI Data Services",
+      "score": 2.5,
+      "archetype": "AI Data (adjacent)",
+      "location": "Den Haag, NL",
+      "status": "Evaluated",
+      "report": "reports/1418-amazon-ai-language-engineer-2026-06-30.md",
+      "notes": "Thin JD; likely annotation/data curation role; Translated RLHF experience relevant but niche"
+    },
+    {
+      "num": 1419,
+      "company": "Oliver James Associates",
+      "role": "Senior Dynatrace Engineer AI Observability",
+      "score": 1.8,
+      "archetype": "DevOps/Observability (not target)",
+      "location": "Utrecht, NL",
+      "status": "Evaluated",
+      "report": "reports/1419-oliver-james-associates-senior-dynatrace-engineer-2026-06-30.md",
+      "notes": "Dynatrace niche hard blocker; senior APM role; wrong archetype"
+    }
+  ]
+}

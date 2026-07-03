@@ -22,6 +22,8 @@ All scripts live in the project root as `.mjs` modules and are exposed via `npm 
 | `npm run scan` | `scan.mjs` | Zero-token portal scanner |
 | `npm run scan:full` | `scan-ats-full.mjs` | Reverse ATS discovery scanner |
 | `npm run validate:portals` | `validate-portals.mjs` | Validate portals.yml shape before scanning |
+| `npm run tracker` | `tracker.mjs` | SQLite derived index over applications.md — sync/query/history/export |
+| `npm run find` | `find.mjs` | Resolve a report#/tracker#/company query to its full pipeline identity |
 
 ---
 
@@ -39,7 +41,7 @@ npm run doctor
 
 ## verify
 
-Health check for pipeline data integrity. Validates `data/applications.md` against seven rules: canonical statuses (per `templates/states.yml`), no duplicate company+role pairs, all report links point to existing files, scores match `X.XX/5` / `N/A` / `DUP`, rows have proper pipe-delimited format, no pending TSVs in `batch/tracker-additions/`, and no markdown bold in scores.
+Health check for pipeline data integrity. Validates `data/applications.md` against nine rules: canonical statuses (per `templates/states.yml`), no duplicate company+role pairs, all report links point to existing files, scores match `X.XX/5` / `N/A` / `DUP`, rows have proper pipe-delimited format, no pending TSVs in `batch/tracker-additions/`, no markdown bold in scores, no two `reports/*.md` files covering the same company+role, and no orphan reports without a tracker row (#1425). The report checks are warning-level: duplicate reports can be legitimate (re-evaluation after a JD change), so they never fail the run.
 
 ```bash
 npm run verify
@@ -251,6 +253,8 @@ npm run scan
 
 **Exit codes:** `0` scan completed, `1` configuration error or no portals.yml found.
 
+---
+
 ## scan:full
 
 Reverse ATS discovery scanner. Where `scan.mjs` scans the companies you track in `portals.yml`, this inverts the direction: it walks public directories of companies per ATS (Greenhouse, Lever, Ashby, Workday) and surfaces fresh postings matching your `portals.yml` `title_filter` / `location_filter` — no manual company curation. Company directories come from the public [job-board-aggregator](https://github.com/Feashliaa/job-board-aggregator) dataset, cached in `data/cache/` for 24 hours.
@@ -268,3 +272,50 @@ node scan-ats-full.mjs --md-out notes/scans    # also write a dated markdown dig
 ```
 
 **Exit codes:** `0` scan completed, `1` configuration error (no portals.yml, unknown `--ats` source) or fatal scan error.
+
+---
+
+## tracker
+
+SQLite **derived index** for the applications tracker (RFC #918, phase 1). `data/applications.md` stays the source of truth; `data/applications.db` is built from it by `sync` and is safe to delete at any time — it regenerates on the next sync. All writes keep going to the markdown exactly as today (`merge-tracker.mjs`, hand edits); the index is read-only infrastructure.
+
+Why: at hundreds of rows a markdown table degrades structurally (encoding corruption, column drift, `|` inside cells shifting columns), and agents grepping it get model-dependent results. The index normalizes on sync, so a query returns the same rows for every model on every CLI — and corruption is detected at sync time instead of propagating silently.
+
+Zero new dependencies — uses `node:sqlite`, built into Node ≥ 22.5.
+
+```bash
+node tracker.mjs sync                     # (re)build applications.db from applications.md
+node tracker.mjs sync --check             # diagnose corruption only, no write (exit 1 if issues found)
+node tracker.mjs query --status Applied --since 2026-05-01
+node tracker.mjs query --company acme --json
+node tracker.mjs history --id 42          # status transitions observed across syncs (Applied → Interview → ...)
+node tracker.mjs export                   # inverse: index → canonical markdown table on stdout
+node tracker.mjs export --out repaired.md # write to a file (existing file backed up to .bak first)
+```
+
+`query` and `history` auto-resync when the markdown changed since the last sync, so the index can never serve stale reads.
+
+`sync` detects and reports the corruption classes markdown accumulates — mojibake placeholder cells, scores stranded in the status column, non-canonical statuses (resolved via `templates/states.yml` aliases), missing/duplicate ids, stray pipes — and normalizes them **in the index only**; the markdown is never modified. Fix at the source with `normalize-statuses.mjs` / `dedup-tracker.mjs`, then re-sync. Status changes between syncs accumulate in a `status_events` table, which gives `analyze-patterns.mjs` a real funnel instead of only the current snapshot.
+
+`export` is the inverse of `sync` (round-trip `md → db → md` is lossless for clean input — enforced by `test-all.mjs`). It writes to stdout by default and never touches `applications.md` unless you explicitly pass it as `--out`. Phase 2 of #918 (DB becomes source of truth, markdown becomes a rendered view) is a separate, explicit per-user opt-in — not part of this script yet.
+
+**Exit codes:** `0` success, `1` validation error, missing prerequisites (Node < 22.5, no `applications.md` to index), or corruption found by `sync --check`.
+
+---
+
+## find
+
+Resolves a report number, tracker number, or company/role fragment to its full pipeline identity: company, role, tracker#, report#, canonical status, PDF path (from `data/pdf-index.tsv`), and report path. "Apply to #13" is ambiguous — report numbers and tracker row numbers diverge — and answering it used to require opening three files; this does it in one read-only lookup.
+
+Zero dependencies, strictly read-only. Numeric queries match **both** the tracker # column and the report number from the Report link (`012` and `12` are the same number), so collisions between the two numbering schemes surface as multiple rows instead of a silent wrong pick. Text queries match company/role by case-insensitive substring, with the shared fuzzy matcher (`role-matcher.mjs`) as fallback for multi-word phrases.
+
+```bash
+node find.mjs 13                # report# OR tracker# 13 — shows both if they differ
+node find.mjs acme              # company fragment
+node find.mjs "data engineer"   # role phrase (fuzzy via role-matcher)
+node find.mjs acme --json       # machine-readable output
+```
+
+Multiple matches print as a table; zero matches print a clean message.
+
+**Exit codes:** `0` at least one match, `1` no match, missing query, or no `applications.md`.

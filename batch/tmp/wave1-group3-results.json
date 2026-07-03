@@ -1,0 +1,92 @@
+[
+  {
+    "num": 1408,
+    "jd_file": "jds/yellowgrape-data-scientist.md",
+    "company": "Yellowgrape",
+    "role": "Data Scientist",
+    "score": 0.0,
+    "status": "SKIP",
+    "pipeline_entry": "Dutch required — hard blocker (Vloeiend in Nederlands en Engels)"
+  },
+  {
+    "num": 1411,
+    "jd_file": "jds/sdg-group-netherlands-an-alten-company-data-engineer.md",
+    "company": "SDG Group (ALTEN)",
+    "role": "Medior Data Engineer",
+    "score": 3.7,
+    "status": "Evaluated",
+    "pipeline_entry": "Strong Databricks/PySpark match; adjacent DE archetype; Azure is quick ramp"
+  },
+  {
+    "num": 1431,
+    "jd_file": "jds/sytac-senior-data-engineer.md",
+    "company": "Sytac",
+    "role": "Senior Data Engineer",
+    "score": 2.8,
+    "status": "Evaluated",
+    "pipeline_entry": "Terraform/K8s/Kafka blockers + seniority gap; LLM angle is differentiator"
+  },
+  {
+    "num": 1434,
+    "jd_file": "jds/alliander-ai-engineer-entrnce.md",
+    "company": "Alliander (ENTRNCE)",
+    "role": "AI Engineer",
+    "score": 0.0,
+    "status": "SKIP",
+    "pipeline_entry": "Dutch B2 required — hard blocker"
+  },
+  {
+    "num": 1435,
+    "jd_file": "jds/tno-startend-machine-learning-engineer.md",
+    "company": "TNO",
+    "role": "Startend Machine Learning Engineer",
+    "score": 0.0,
+    "status": "SKIP",
+    "pipeline_entry": "Dutch required (client-facing) — hard blocker"
+  },
+  {
+    "num": 1436,
+    "jd_file": "jds/pararius-ai-engineer.md",
+    "company": "Pararius",
+    "role": "AI Engineer",
+    "score": 2.0,
+    "status": "Evaluated",
+    "pipeline_entry": "JD content not captured — fetch live page manually; proptech AI could be strong match"
+  },
+  {
+    "num": 1438,
+    "jd_file": "jds/nn-group-senior-data-engineer-data-mall-freelance.md",
+    "company": "NN Group",
+    "role": "Senior Data Engineer (Freelance)",
+    "score": 1.5,
+    "status": "SKIP",
+    "pipeline_entry": "10+ years required vs 4-5 years; freelance not target employment type"
+  },
+  {
+    "num": 1440,
+    "jd_file": "jds/rebelsai-applied-ai-consultant.md",
+    "company": "RebelsAI",
+    "role": "Applied AI Consultant",
+    "score": 2.0,
+    "status": "Evaluated",
+    "pipeline_entry": "JD too thin; verify Dutch req — NL consulting roles often require Dutch"
+  },
+  {
+    "num": 1442,
+    "jd_file": "jds/thermeleon-bv-research-engineer-duurzame-start-up.md",
+    "company": "Thermeleon B.V.",
+    "role": "Research Engineer",
+    "score": 1.5,
+    "status": "SKIP",
+    "pipeline_entry": "Hardware/physical engineering role — outside target archetypes"
+  },
+  {
+    "num": 1444,
+    "jd_file": "jds/spektrum-data-engineer.md",
+    "company": "Spektrum (NATO/NCIA)",
+    "role": "Data Engineer",
+    "score": 2.2,
+    "status": "Evaluated",
+    "pipeline_entry": "NATO Secret clearance likely ineligible for zoekjaar; K8s gap; verify before applying"
+  }
+]

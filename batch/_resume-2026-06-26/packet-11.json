@@ -1,0 +1,34 @@
+[
+  {
+    "num": "1315",
+    "company": "NATO NCIA",
+    "role": "Data Engineer",
+    "score": "3.5",
+    "report": "reports/1315-nato-communications-and-information-agency-ncia-2026-06-26.md",
+    "core": "nato-communications-and-information-agency-ncia"
+  },
+  {
+    "num": "1318",
+    "company": "Jimmy Technologies",
+    "role": "Senior FullStack AI Engineer",
+    "score": "3.5",
+    "report": "reports/1318-jimmy-technologies-2026-06-26.md",
+    "core": "jimmy-technologies"
+  },
+  {
+    "num": "1319",
+    "company": "XM",
+    "role": "Senior AI Engineer",
+    "score": "3.5",
+    "report": "reports/1319-xm-2026-06-26.md",
+    "core": "xm"
+  },
+  {
+    "num": "1352",
+    "company": "Nagarro",
+    "role": "LLM Engineer",
+    "score": "3.5",
+    "report": "reports/1352-nagarro-2026-06-26.md",
+    "core": "nagarro-1352"
+  }
+]

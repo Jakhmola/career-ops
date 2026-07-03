@@ -4,7 +4,12 @@
  * generate-pdf.mjs — HTML → PDF via Playwright
  *
  * Usage:
- *   node career-ops/generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4]
+ *   node career-ops/generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4] [--report=NNN]
+ *
+ * --report links the generated PDF to its tracker/report number and records
+ * the linkage in data/pdf-index.tsv so downstream tools (e.g. the TUI
+ * dashboard's `d`/`D` hotkeys) can locate the exact PDF for an application.
+ * Without --report a manifest row is still written, just unkeyed.
  *
  * Requires: @playwright/test (or playwright) installed.
  * Uses Chromium headless to render the HTML and produce a clean, ATS-parseable PDF.
@@ -12,10 +17,11 @@
 
 import { chromium } from 'playwright';
 import { chromiumLaunchOptions } from './browser-exec.mjs';
-import { resolve, dirname } from 'path';
+import { resolve, dirname, relative, sep, isAbsolute } from 'path';
 import { readFile } from 'fs/promises';
-import { mkdirSync } from 'fs';
-import { fileURLToPath } from 'url';
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { randomUUID } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -99,39 +105,6 @@ function normalizeTextForATS(html) {
     t = t.replace(/\u2264|&le;|&#8804;/g, () => { bump('le', 1); return '<='; });
     return t;
   }
-}
-
-/**
- * Inline self-hosted @font-face sources (url('./fonts/X')) as base64 data: URIs.
- *
- * Why base64 and not file:// URLs: when the page is created via page.setContent(),
- * Chromium treats cross-directory file:// font fetches as opaque-origin subresources
- * and silently blocks them \u2014 the document falls back to a system font (Liberation/Arial).
- * Inlined data: URIs carry no origin, so they always load.
- *
- * Pair this with STATIC (single-weight) TTFs in fonts/, NOT variable woff2: Chromium
- * cannot cleanly subset a variable font into the PDF and falls back to Type 3 glyph
- * procedures, which corrupts ATS text extraction (spurious spaces inside words, e.g.
- * "j4khmola @gma il.com"). Static TTFs embed as CID TrueType and extract cleanly.
- */
-async function inlineFonts(html, fontsDir) {
-  const mime = { woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf', otf: 'font/otf' };
-  const refs = new Set();
-  for (const m of html.matchAll(/url\(['"]?\.\/fonts\/([^'")]+)['"]?\)/g)) refs.add(m[1]);
-  for (const file of refs) {
-    const ext = file.split('.').pop().toLowerCase();
-    try {
-      const b64 = (await readFile(resolve(fontsDir, file))).toString('base64');
-      const re = new RegExp(
-        `url\\(['"]?\\.\\/fonts\\/${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]?\\)`,
-        'g'
-      );
-      html = html.replace(re, `url(data:${mime[ext] || 'font/ttf'};base64,${b64})`);
-    } catch {
-      console.warn(`\u26A0\uFE0F  font not found, leaving reference as-is: ${file}`);
-    }
-  }
-  return html;
 }
 
 const SECTION_ALIASES = new Map([
@@ -218,15 +191,79 @@ function validateCvSectionOrder(html, cvMarkdown) {
   }
 }
 
+/**
+ * Convert a path to a repo-relative manifest entry, or blank if it is unknown
+ * or outside the career-ops repository.
+ *
+ * @param {string} pathValue - Absolute or cwd-relative filesystem path.
+ * @returns {string} Repo-relative path using forward slashes, or an empty string.
+ */
+export function repoRelativeManifestPath(pathValue) {
+  if (!pathValue) return '';
+  const rel = relative(__dirname, resolve(pathValue));
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return '';
+  return rel.split(sep).join('/');
+}
+
+/**
+ * Record a generated PDF in data/pdf-index.tsv so tools can map a tracker
+ * report number to the exact PDF (and its source HTML for regeneration).
+ *
+ * Columns: report \t pdf \t html \t format \t date — paths relative to the
+ * career-ops root with forward slashes. One row per PDF path; when a report
+ * number is given, older rows for that report are dropped too (regenerated
+ * CVs supersede stale entries). The file is gitignored: it references
+ * gitignored output/ artifacts and is meaningless on another machine.
+ */
+function updatePDFManifest(reportNum, pdfPath, htmlPath, format) {
+  const manifestPath = resolve(__dirname, 'data', 'pdf-index.tsv');
+  const toRel = (p) => relative(__dirname, p).split(sep).join('/');
+  const relPDF = toRel(pdfPath);
+  const relHTML = repoRelativeManifestPath(htmlPath);
+  const date = new Date().toISOString().slice(0, 10);
+  // "008" and "8" are the same report — zero-padded report-link form vs
+  // unpadded tracker-# form. Normalize so replacement rows match.
+  const normKey = (s) => (s || '').trim().replace(/^0+(?=\d)/, '');
+
+  let lines = [];
+  if (existsSync(manifestPath)) {
+    lines = readFileSync(manifestPath, 'utf-8').split('\n').filter((line) => {
+      if (!line.trim() || line.startsWith('#')) return false;
+      const fields = line.split('\t');
+      if (fields[1] === relPDF) return false;
+      if (reportNum && normKey(fields[0]) === normKey(reportNum)) return false;
+      return true;
+    });
+  }
+
+  lines.push([reportNum || '', relPDF, relHTML, format, date].join('\t'));
+
+  mkdirSync(dirname(manifestPath), { recursive: true });
+  writeFileSync(
+    manifestPath,
+    '# report\tpdf\thtml\tformat\tdate — written by generate-pdf.mjs, do not edit\n' +
+      lines.join('\n') + '\n'
+  );
+  return relPDF;
+}
+
+/**
+ * CLI entrypoint that reads an HTML file, applies ATS-safe normalization, and
+ * renders the PDF while preserving report/source metadata for the manifest.
+ *
+ * @returns {Promise<{outputPath: string, pageCount: number, size: number}>}
+ */
 async function generatePDF() {
   const args = process.argv.slice(2);
 
   // Parse arguments
-  let inputPath, outputPath, format = 'a4';
+  let inputPath, outputPath, format = 'a4', reportNum = '';
 
   for (const arg of args) {
     if (arg.startsWith('--format=')) {
       format = arg.split('=')[1].toLowerCase();
+    } else if (arg.startsWith('--report=')) {
+      reportNum = arg.split('=')[1].trim();
     } else if (!inputPath) {
       inputPath = arg;
     } else if (!outputPath) {
@@ -235,15 +272,29 @@ async function generatePDF() {
   }
 
   if (!inputPath || !outputPath) {
-    console.error('Usage: node generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4]');
+    console.error('Usage: node generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4] [--report=NNN]');
+    process.exit(1);
+  }
+
+  if (reportNum && !/^\d+$/.test(reportNum)) {
+    console.error(`Invalid --report "${reportNum}". Use the numeric tracker/report number, e.g. --report=018`);
     process.exit(1);
   }
 
   inputPath = resolve(inputPath);
   outputPath = resolve(outputPath);
 
-  // Ensure the output file's parent directory exists (e.g. output/cover-letters/)
-  mkdirSync(dirname(outputPath), { recursive: true });
+  // Path-traversal guard: keep the PDF write inside the project directory so a
+  // crafted output argument (e.g. "../../etc/cron.d/x") can't escape the repo.
+  // Anchored to the repo root (__dirname), not process.cwd(): running the script
+  // from outside the repo used to falsely refuse in-repo outputs — and, worse,
+  // would have allowed writes anywhere under an arbitrary cwd. (renderHtmlToPdf
+  // mkdirSyncs the output's parent dir, so subdirs like output/ still get made.)
+  const relOut = relative(__dirname, outputPath);
+  if (relOut === '' || relOut.startsWith('..') || isAbsolute(relOut)) {
+    console.error(`Refusing to write the PDF outside the project directory: ${outputPath}`);
+    process.exit(1);
+  }
 
   // Validate format
   const validFormats = ['a4', 'letter'];
@@ -256,7 +307,6 @@ async function generatePDF() {
   console.log(`📁 Output: ${outputPath}`);
   console.log(`📏 Format: ${format.toUpperCase()}`);
 
-  // Read HTML and inline self-hosted fonts as base64 data: URIs (see inlineFonts).
   let html = await readFile(inputPath, 'utf-8');
 
   // Validate CV section order against cv.md (#817). No-op for cover letters: they lack
@@ -279,12 +329,6 @@ async function generatePDF() {
     console.warn('   (Expected when pdf mode reorders sections for the recruiter scan — continuing.)');
   }
 
-  // Inline self-hosted fonts as base64 data: URIs (see inlineFonts). Deliberately kept
-  // over upstream's file:// font replacement: Chromium silently blocks cross-directory
-  // file:// font fetches under page.setContent() and falls back to a system font, which
-  // corrupts ATS text extraction. Base64 data: URIs carry no origin, so they always load.
-  html = await inlineFonts(html, resolve(__dirname, 'fonts'));
-
   // Normalize text for ATS compatibility (issue #1)
   const normalized = normalizeTextForATS(html);
   html = normalized.html;
@@ -294,34 +338,92 @@ async function generatePDF() {
     console.log(`🧹 ATS normalization: ${totalReplacements} replacements (${breakdown})`);
   }
 
-  return renderHtmlToPdf(html, outputPath, { format, baseDir: dirname(inputPath) });
+  return renderHtmlToPdf(html, outputPath, { format, baseDir: dirname(inputPath), reportNum, inputPath });
+}
+
+/**
+ * Inline url('./fonts/...') references as base64 data: URLs.
+ *
+ * Chromium refuses to load file:// subresources from a setContent() page
+ * (the document stays at about:blank), so fonts referenced by path are
+ * silently dropped and PDFs fall back to system fonts. data: URLs carry
+ * no origin restriction, so they load from any page. See #951.
+ *
+ * Missing font files keep their original reference and log a warning.
+ *
+ * @param {string} html - HTML that may reference url('./fonts/<file>').
+ * @returns {Promise<string>} HTML with local font references inlined.
+ */
+export async function inlineLocalFonts(html) {
+  const FONT_REF = /url\(\s*(['"]?)\.\/fonts\/([^'")\s]+)\1\s*\)/g;
+  const MIME = { woff2: 'font/woff2', woff: 'font/woff', otf: 'font/otf', ttf: 'font/ttf' };
+  const fontsDir = resolve(__dirname, 'fonts');
+  const names = [...new Set([...html.matchAll(FONT_REF)].map((m) => m[2]))];
+  const dataUrls = new Map();
+  for (const name of names) {
+    // Containment check: ".." segments and absolute names (./fonts//etc/passwd)
+    // would otherwise resolve outside fonts/.
+    const fontPath = resolve(fontsDir, name);
+    const rel = relative(fontsDir, fontPath);
+    if (rel.startsWith('..') || isAbsolute(rel)) {
+      console.warn(`⚠️  Font reference escapes fonts/, keeping original reference: ${name}`);
+      continue;
+    }
+    try {
+      const buf = await readFile(fontPath);
+      const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+      dataUrls.set(name, `url('data:${MIME[ext] || 'application/octet-stream'};base64,${buf.toString('base64')}')`);
+    } catch (err) {
+      if (err?.code !== 'ENOENT') throw err;
+      console.warn(`⚠️  Font file not found, keeping original reference: fonts/${name}`);
+    }
+  }
+  return html.replace(FONT_REF, (match, _quote, name) => dataUrls.get(name) || match);
 }
 
 /**
  * Render an HTML string to a PDF file via headless Chromium.
  *
+ * Writes the HTML to a temporary file in the baseDir and loads it via
+ * page.goto() to give the page a file:// origin. This allows relative
+ * resources (images, fonts) to load — setContent() runs from about:blank
+ * and Chromium blocks file:// subresource loads from non-file origins.
+ *
+ * Local url('./fonts/...') references are inlined as data: URLs first so
+ * fonts also survive the ATS normalization pass (which may strip font refs).
+ *
  * @param {string} html - Full HTML document to render.
  * @param {string} outputPath - Absolute path to write the PDF to.
- * @param {{format?: 'a4'|'letter', baseDir?: string}} [opts]
+ * @param {{format?: 'a4'|'letter', baseDir?: string, reportNum?: string, inputPath?: string}} [opts]
  * @returns {Promise<{outputPath: string, pageCount: number, size: number}>}
  */
 export async function renderHtmlToPdf(html, outputPath, opts = {}) {
   const format = opts.format || 'a4';
   const baseDir = opts.baseDir || process.cwd();
+  const reportNum = opts.reportNum || '';
+  const inputPath = opts.inputPath || '';
 
   mkdirSync(dirname(outputPath), { recursive: true });
 
+  html = await inlineLocalFonts(html);
+
+  // Write HTML to a temp file in baseDir so page.goto() gives a file://
+  // origin that can load local images, fonts, and other resources.
+  const tmpHtmlPath = resolve(baseDir, `.career-ops-render-${randomUUID()}.html`);
+  const { writeFile, unlink } = await import('fs/promises');
+  await writeFile(tmpHtmlPath, html, 'utf-8');
+
+  // System-Chrome fallback (bundled Chromium download is broken on some machines).
   const browser = await chromium.launch(chromiumLaunchOptions(chromium, { headless: true }));
   try {
     const page = await browser.newPage();
 
-    // Set content with file base URL for any relative resources
-    await page.setContent(html, {
+    // Load from file:// so the page origin allows local subresources
+    await page.goto(pathToFileURL(tmpHtmlPath).href, {
       waitUntil: 'load',
-      baseURL: `file://${baseDir}/`,
     });
 
-    // Wait for fonts to load
+    // Wait for fonts and images to settle
     await page.evaluate(() => document.fonts.ready);
 
     // Generate PDF
@@ -338,7 +440,6 @@ export async function renderHtmlToPdf(html, outputPath, opts = {}) {
     });
 
     // Write PDF
-    const { writeFile } = await import('fs/promises');
     await writeFile(outputPath, pdfBuffer);
 
     // Count pages (approximate from PDF structure)
@@ -349,13 +450,23 @@ export async function renderHtmlToPdf(html, outputPath, opts = {}) {
     console.log(`📊 Pages: ${pageCount}`);
     console.log(`📦 Size: ${(pdfBuffer.length / 1024).toFixed(1)} KB`);
 
+    try {
+      updatePDFManifest(reportNum, outputPath, inputPath, format);
+      console.log(`🔗 Manifest: data/pdf-index.tsv updated${reportNum ? ` (report ${reportNum})` : ' (no --report given)'}`);
+    } catch (err) {
+      // The PDF itself succeeded — never fail the run over manifest bookkeeping.
+      console.error(`⚠️  Manifest update failed: ${err.message}`);
+    }
+
     return { outputPath, pageCount, size: pdfBuffer.length };
   } finally {
     await browser.close();
+    // Clean up temp file
+    await unlink(tmpHtmlPath).catch(() => {});
   }
 }
 
-const isMain = process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`;
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
   generatePDF().catch((err) => {
     console.error('❌ PDF generation failed:', err.message);

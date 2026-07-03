@@ -1,0 +1,34 @@
+[
+  {
+    "num": "1229",
+    "company": "MarketingConcurrent",
+    "role": "AI Automation Engineer",
+    "score": "3.5",
+    "report": "reports/1229-marketingconcurrent-2026-06-26.md",
+    "core": "marketingconcurrent"
+  },
+  {
+    "num": "1240",
+    "company": "Avanade",
+    "role": "Junior AI Engineer - Based in Netherlands",
+    "score": "3.5",
+    "report": "reports/1240-avanade-2026-06-26.md",
+    "core": "avanade"
+  },
+  {
+    "num": "1243",
+    "company": "Elektramat B.V.",
+    "role": "AI Engineer",
+    "score": "3.5",
+    "report": "reports/1243-elektramat-b-v-2026-06-26.md",
+    "core": "elektramat-b-v"
+  },
+  {
+    "num": "1265",
+    "company": "Sijthoff Media",
+    "role": "Process Automation & AI Specialist",
+    "score": "3.5",
+    "report": "reports/1265-sijthoff-media-2026-06-26.md",
+    "core": "sijthoff-media"
+  }
+]

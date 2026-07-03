@@ -1,0 +1,34 @@
+[
+  {
+    "num": "1391",
+    "company": "Next Lead",
+    "role": "Senior Data Engineer",
+    "score": "3.7",
+    "report": "reports/1391-next-lead-2026-06-26.md",
+    "core": "next-lead"
+  },
+  {
+    "num": "1394",
+    "company": "NN Group",
+    "role": "Data Scientist",
+    "score": "3.7",
+    "report": "reports/1394-nn-group-2026-06-26.md",
+    "core": "nn-group-1394"
+  },
+  {
+    "num": "1302",
+    "company": "EPAM Systems",
+    "role": "Senior AI Engineer",
+    "score": "3.6",
+    "report": "reports/1302-epam-systems-2026-06-26.md",
+    "core": "epam-systems"
+  },
+  {
+    "num": "1317",
+    "company": "Haystack People",
+    "role": "Data Engineer - Energy Tech Organisatie",
+    "score": "3.6",
+    "report": "reports/1317-haystack-people-2026-06-26.md",
+    "core": "haystack-people"
+  }
+]

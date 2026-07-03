@@ -1,0 +1,92 @@
+[
+  {
+    "num": "1398",
+    "jd_file": "jds/whats-next-ai-ai-engineer-llm-engineer.md",
+    "company": "What's Next AI",
+    "role": "AI Engineer / LLM Engineer",
+    "score": 4.4,
+    "status": "Evaluated",
+    "pipeline_entry": "- [x] #1398 | local:jds/whats-next-ai-ai-engineer-llm-engineer.md | What's Next AI | AI Engineer / LLM Engineer | 4.4/5 | PDF ❌"
+  },
+  {
+    "num": "1399",
+    "jd_file": "jds/huxley-ai-engineer.md",
+    "company": "Huxley (FinTech NL)",
+    "role": "AI Engineer",
+    "score": 3.8,
+    "status": "Evaluated",
+    "pipeline_entry": "- [x] #1399 | local:jds/huxley-ai-engineer.md | Huxley (FinTech NL) | AI Engineer | 3.8/5 | PDF ❌"
+  },
+  {
+    "num": "1400",
+    "jd_file": "jds/treehouse-nl-ai-engineer.md",
+    "company": "TreeHouse NL",
+    "role": "AI Engineer",
+    "score": 3.0,
+    "status": "Evaluated",
+    "pipeline_entry": "- [x] #1400 | local:jds/treehouse-nl-ai-engineer.md | TreeHouse NL | AI Engineer | 3.0/5 | PDF ❌"
+  },
+  {
+    "num": "1401",
+    "jd_file": "jds/tno-entry-level-machine-learning-engineer.md",
+    "company": "TNO",
+    "role": "Entry-level Machine Learning Engineer",
+    "score": 0.0,
+    "status": "SKIP",
+    "pipeline_entry": "- [x] #1401 | local:jds/tno-entry-level-machine-learning-engineer.md | TNO | Entry-level Machine Learning Engineer | SKIP | PDF ❌"
+  },
+  {
+    "num": "1402",
+    "jd_file": "jds/sopra-steria-medior-data-scientist-ml-engineer.md",
+    "company": "Sopra Steria",
+    "role": "Medior Data Scientist / ML Engineer",
+    "score": 0.0,
+    "status": "SKIP",
+    "pipeline_entry": "- [x] #1402 | local:jds/sopra-steria-medior-data-scientist-ml-engineer.md | Sopra Steria | Medior Data Scientist / ML Engineer | SKIP | PDF ❌"
+  },
+  {
+    "num": "1403",
+    "jd_file": "jds/magno-it-recruitment-data-scientist.md",
+    "company": "Magno IT (fin. inst.)",
+    "role": "Data Scientist",
+    "score": 3.5,
+    "status": "Evaluated",
+    "pipeline_entry": "- [x] #1403 | local:jds/magno-it-recruitment-data-scientist.md | Magno IT (fin. inst.) | Data Scientist | 3.5/5 | PDF ❌"
+  },
+  {
+    "num": "1404",
+    "jd_file": "jds/european-space-agency-esa-junior-professional-in-ai-and-data-science.md",
+    "company": "European Space Agency (ESA)",
+    "role": "Junior Professional in AI and Data Science",
+    "score": 0.0,
+    "status": "SKIP",
+    "pipeline_entry": "- [x] #1404 | local:jds/european-space-agency-esa-junior-professional-in-ai-and-data-science.md | ESA | Junior Professional in AI and Data Science | SKIP | PDF ❌"
+  },
+  {
+    "num": "1405",
+    "jd_file": "jds/datashift-data-engineer.md",
+    "company": "Datashift",
+    "role": "Data Engineer",
+    "score": 3.0,
+    "status": "Evaluated",
+    "pipeline_entry": "- [x] #1405 | local:jds/datashift-data-engineer.md | Datashift | Data Engineer | 3.0/5 | PDF ❌"
+  },
+  {
+    "num": "1406",
+    "jd_file": "jds/philips-ai-transformation-agentic-platforms-senior-leader.md",
+    "company": "Philips",
+    "role": "AI Transformation & Agentic Platforms Senior Leader",
+    "score": 2.0,
+    "status": "Evaluated",
+    "pipeline_entry": "- [x] #1406 | local:jds/philips-ai-transformation-agentic-platforms-senior-leader.md | Philips | AI Transformation & Agentic Platforms Senior Leader | 2.0/5 | PDF ❌"
+  },
+  {
+    "num": "1407",
+    "jd_file": "jds/bookingcom-machine-learning-engineer-i.md",
+    "company": "Booking.com",
+    "role": "Machine Learning Engineer I",
+    "score": 3.8,
+    "status": "Evaluated",
+    "pipeline_entry": "- [x] #1407 | local:jds/bookingcom-machine-learning-engineer-i.md | Booking.com | Machine Learning Engineer I | 3.8/5 | PDF ❌"
+  }
+]

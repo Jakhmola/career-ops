@@ -1,0 +1,34 @@
+[
+  {
+    "num": "1333",
+    "company": "CrewHarbor S.R.L.",
+    "role": "Senior AI Engineer and Python Developer",
+    "score": "3.6",
+    "report": "reports/1333-crewharbor-s-r-l-2026-06-26.md",
+    "core": "crewharbor-s-r-l"
+  },
+  {
+    "num": "1349",
+    "company": "Sngular",
+    "role": "Senior Machine Learning Engineer (Demand Forecasting)",
+    "score": "3.6",
+    "report": "reports/1349-sngular-2026-06-26.md",
+    "core": "sngular"
+  },
+  {
+    "num": "1388",
+    "company": "LanceSoft Europe",
+    "role": "Senior GenAI Engineer",
+    "score": "3.6",
+    "report": "reports/1388-lancesoft-europe-2026-06-26.md",
+    "core": "lancesoft-europe"
+  },
+  {
+    "num": "1220",
+    "company": "Protolabs",
+    "role": "Senior Machine Learning Engineer",
+    "score": "3.5",
+    "report": "reports/1220-protolabs-2026-06-26.md",
+    "core": "protolabs"
+  }
+]

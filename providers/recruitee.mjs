@@ -88,8 +88,13 @@ async function sameTenantRedirectTarget(url) {
  * Recruitee returns:
  *   { offers: [{ title, careers_url?, url?, city?, country?, remote?, location? }] }
  *
- * - url: prefer `careers_url`, fall back to `url`; validated against
- *   `https://<safe-slug>.recruitee.com` — an off-domain or non-HTTPS URL is
+ * - url: prefer `careers_url`, fall back to `url`. Recruitee tenants commonly
+ *   serve postings on their own custom domain (e.g. `careers.hostaway.com`),
+ *   so this URL is NOT host-locked to `*.recruitee.com`. Unlike the API
+ *   endpoint, the per-offer URL is display-only — it is written to the pipeline
+ *   and scan history but never server-fetched here, so the SSRF rationale does
+ *   not apply. It is sourced from the already-validated tenant API response.
+ *   Requirement: a well-formed `https:` URL; a non-HTTPS or malformed URL is
  *   dropped (empty string returned per the Job contract).
  * - location: prefer the explicit `location` field; else assemble from
  *   city/country, appending "Remote" when `remote` is true.
@@ -107,12 +112,13 @@ export function parseRecruiteeResponse(json, companyName) {
     const remote = j.remote ? 'Remote' : '';
     const location = j.location || [city, country, remote].filter(Boolean).join(', ');
 
-    // Validate offer URL: any well-formed HTTPS URL is accepted. Tenants with
-    // a branded careers domain (Tether → careers.tether.io) put it in
-    // careers_url — rejecting non-*.recruitee.com hosts blanked the URL and
-    // the offer died at the scanner's invalid-URL guard. Navigation safety is
-    // the liveness layer's job (rejectPrivateOrInvalid blocks private hosts),
-    // same trust model as scraper/aggregator URLs.
+    // Resolve offer URL. Recruitee tenants commonly publish postings on their
+    // own custom domain (e.g. careers.hostaway.com, careers.tether.io), so the
+    // per-offer URL is NOT host-locked to *.recruitee.com — it is display-only
+    // (recorded in the pipeline/history, never server-fetched here) and comes
+    // from the already-validated tenant API response. Require only a well-formed
+    // https: URL; a non-https or malformed URL is dropped (empty string per the
+    // Job contract).
     let url = '';
     const rawUrl = j.careers_url || j.url || '';
     if (typeof rawUrl === 'string' && rawUrl) {
