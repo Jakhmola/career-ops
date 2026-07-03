@@ -20,6 +20,7 @@
 14. Write HTML to `/tmp/cv-{candidate}-{company}.html`
 15. Execute: `node generate-pdf.mjs /tmp/cv-{candidate}-{company}.html output/cv-{candidate}-{company}-{YYYY-MM-DD}.pdf --format={letter|a4}`
 16. Report: PDF path, number of pages, keyword coverage %
+17. **Sync the report header** (so the dashboard doesn't show a stale "not generated"): rewrite the evaluation report's `**PDF:**` line to `**PDF:** output/cv-{candidate}-{company}-{YYYY-MM-DD}.pdf ✅`, and set its tracker PDF column to ✅. If unsure which report/rows to touch, just run `node reconcile-pdfs.mjs --apply` — it scans `output/` and reconciles every stale report header + tracker PDF column to match the CV PDFs that actually exist (idempotent, dry-run without `--apply`).
 
 ## ATS Rules (clean parsing)
 
