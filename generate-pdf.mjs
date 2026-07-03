@@ -76,6 +76,11 @@ function normalizeTextForATS(html) {
     // The raw-char passes above don't match the literal entity strings, so handle them too.
     t = t.replace(/&mdash;|&#8212;|&#x2014;/gi, () => { bump('em-dash', 1); return '-'; });
     t = t.replace(/&ndash;|&#8211;|&#x2013;/gi, () => { bump('en-dash', 1); return '-'; });
+    // Double (or more) hyphens used as a dash ("Role -- Company", "AI--driven") read as
+    // an ASCII em-dash and are an AI/typewriter tell. Collapse to a single hyphen. Runs
+    // only on visible text (tags are masked above), so href URLs are untouched. House
+    // rule: single hyphen only — see voice-dna.md / modes/_custom.md.
+    t = t.replace(/-{2,}/g, () => { bump('double-hyphen', 1); return '-'; });
     t = t.replace(/[\u201C\u201D\u201E\u201F]/g, () => { bump('smart-double-quote', 1); return '"'; });
     t = t.replace(/[\u2018\u2019\u201A\u201B]/g, () => { bump('smart-single-quote', 1); return "'"; });
     t = t.replace(/\u2026/g, () => { bump('ellipsis', 1); return '...'; });

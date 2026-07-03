@@ -35,7 +35,7 @@ Write like a sharp human who happens to be typing.
 - Short paragraphs (1-2 sentences default, 3 max).
 - Numbers as digits (3 years, 10 tools, 500 users).
 - Contractions always.
-- **NO em dashes.** AI overuses them. Use commas, periods, colons, semicolons, or parentheses.
+- **NO em dashes (—), en dashes (–), or double hyphens (--).** AI overuses them, and `--` is just as much a tell as `—`. Use commas, periods, colons, semicolons, or parentheses. When a dash is genuinely the right punctuation, use a single spaced hyphen ` - ` — never `--` or `—`.
 - Bold sparingly: 1-2 key moments per section.
 - Code blocks for specific prompts, commands, or tool outputs.
 - Use formatting like salt. Headers, bullets, numbered lists: only when they earn it.
