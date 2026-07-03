@@ -23,6 +23,17 @@
 // failure), log a one-line skip and return [] — never throw for mere absence,
 // matching jobspy's pattern.
 //
+// Proxy / NL-exit support: werk.nl serves its public vacancy search only to
+// allowed (NL) IPs — a datacenter/foreign IP gets infinite-redirect-walled into
+// UWV's Oracle Access Manager SSO. The scraper must egress through an NL exit.
+// If a system-wide VPN (WireGuard/OpenVPN/Mullvad) is active, node/Playwright
+// are already routed and no proxy is needed. If the VPN is browser-only, set a
+// proxy so Playwright is routed regardless: board `proxy:` or scrapers.playwright
+// `proxy:` in portals.yml, or env CAREER_OPS_PROXY / WERKNL_PROXY. Accepts a URL
+// string (`http://user:pass@host:port`, `socks5://host:port`) or an object
+// `{server, username, password}`. When the IP is blocked and no exit is set, the
+// board fails gracefully (per-board try/catch) and returns nothing.
+//
 // NO detect() — scrapers must never be auto-matched to a tracked_companies entry.
 
 // ── Handler registry ────────────────────────────────────────────────────────
@@ -72,7 +83,16 @@ export default {
     const allJobs = [];
 
     try {
-      browser = await chromium.launch({ headless: true });
+      // Use the shared system-Chrome fallback (the bundled Chromium download is
+      // broken in some environments) and thread an optional NL-exit proxy so
+      // werk.nl can be reached from a browser-only-VPN setup. chromiumLaunchOptions
+      // only sets executablePath when Playwright's own browser is missing.
+      const { chromiumLaunchOptions } = await import('../browser-exec.mjs');
+      const proxy = resolvePlaywrightProxy(descriptor);
+      if (proxy) console.log(`playwright-scraper: routing through proxy ${proxy.server}`);
+      browser = await chromium.launch(
+        chromiumLaunchOptions(chromium, { headless: true, ...(proxy ? { proxy } : {}) }),
+      );
       const context = await browser.newContext({
         userAgent:
           'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
@@ -106,6 +126,57 @@ export default {
     return allJobs;
   },
 };
+
+// ── Proxy resolution (NL exit for IP-gated boards like werk.nl) ───────────────
+
+/**
+ * Resolve a Playwright launch proxy from (in priority order): env WERKNL_PROXY,
+ * env CAREER_OPS_PROXY, scrapers.playwright `proxy:`, or the first board with a
+ * `proxy:`. Returns a Playwright proxy object or undefined (no proxy → direct,
+ * which is correct when a system-wide VPN already routes node).
+ *
+ * @param {{config?: {proxy?: unknown, boards?: any[]}}} descriptor
+ * @returns {{server: string, username?: string, password?: string}|undefined}
+ */
+export function resolvePlaywrightProxy(descriptor) {
+  const cfg = descriptor?.config || {};
+  const boards = Array.isArray(cfg.boards) ? cfg.boards : [];
+  const fromBoard = boards.map((b) => b && b.proxy).find(Boolean);
+  const candidate =
+    process.env.WERKNL_PROXY || process.env.CAREER_OPS_PROXY || cfg.proxy || fromBoard;
+  return parseProxy(candidate);
+}
+
+/**
+ * Normalize a proxy spec (URL string or {server,username,password}) into the
+ * Playwright launch shape. Credentials embedded in a URL are split out (Playwright
+ * wants them as separate fields). Exported for unit tests.
+ *
+ * @param {unknown} value
+ * @returns {{server: string, username?: string, password?: string}|undefined}
+ */
+export function parseProxy(value) {
+  if (!value) return undefined;
+  if (typeof value === 'object') {
+    const server = value && typeof value.server === 'string' ? value.server.trim() : '';
+    if (!server) return undefined;
+    const out = { server };
+    if (value.username) out.username = String(value.username);
+    if (value.password) out.password = String(value.password);
+    return out;
+  }
+  const str = String(value).trim();
+  if (!str) return undefined;
+  try {
+    const u = new URL(str.includes('://') ? str : `http://${str}`);
+    const out = { server: `${u.protocol}//${u.host}` };
+    if (u.username) out.username = decodeURIComponent(u.username);
+    if (u.password) out.password = decodeURIComponent(u.password);
+    return out;
+  } catch {
+    return { server: `http://${str}` };
+  }
+}
 
 // ── IamExpat handler ──────────────────────────────────────────────────────────
 
@@ -300,6 +371,9 @@ async function scrapeWerkNl(page, boardConfig) {
     : ['machine learning', 'AI engineer', 'data scientist'];
   const maxResults = Number(boardConfig.max_results) > 0 ? Math.trunc(Number(boardConfig.max_results)) : 60;
   const maxPages = Number(boardConfig.max_pages) > 0 ? Math.trunc(Number(boardConfig.max_pages)) : 3;
+  // Optional "Where" filter — maps to the search UI's location box. Empty string
+  // (the default) searches all of NL, matching the original behavior.
+  const location = typeof boardConfig.location === 'string' ? boardConfig.location.trim() : '';
 
   // ── Step 1: bootstrap the page (sets XSRF-TOKEN cookie) ────────────────────
   await page.goto(`${BASE}/nl/vacatures/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -352,7 +426,7 @@ async function scrapeWerkNl(page, boardConfig) {
       const body = JSON.stringify({
         facets: [],
         keywords: query,
-        location: '',
+        location,
         currentPage: pageNum,
         sort: { by: 1, direction: 1 },
         keywordsChanged,

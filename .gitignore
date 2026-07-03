@@ -42,6 +42,9 @@ modes/_profile.md
 
 # Secrets (never commit — use .env.example as template)
 .env
+# Authenticated LinkedIn session cookie — a live login token, treat like a password
+linkedin-storage-state.json
+*storage-state.json
 
 # Generated
 .resolved-prompt-*

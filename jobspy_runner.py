@@ -105,6 +105,10 @@ def main(argv):
                 "url": str(r.get("job_url", "")).strip(),
                 "url_direct": str(r.get("job_url_direct", "")).strip(),
                 "description": clean(r.get("description", "")),
+                # date_posted (jobspy column, e.g. "2026-06-22") rides along so
+                # downstream consumers can compute posting freshness. Mapped to
+                # an epoch `postedAt` in mapJobspyRecords; scan.mjs ignores it.
+                "date_posted": str(r.get("date_posted", "")).strip(),
             })
 
     emit({"jobs": jobs})

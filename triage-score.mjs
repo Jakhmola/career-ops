@@ -46,6 +46,7 @@ const SOURCE_PRIOR = {
   websearch: 14,
   careerjet: 12,
   'jobspy:linkedin': 12,
+  'linkedin-guest': 12,   // native guest-API LinkedIn provider — same board as jobspy:linkedin
   jobspy: 11,
   'jobspy:indeed': 10,
   playwright: 10,

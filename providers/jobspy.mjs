@@ -89,6 +89,12 @@ export default {
     const jobs = [];
     let anyOk = false;
     let lastErr = null;
+    // Per-site bookkeeping for the zero-result guard: did any call for the site
+    // succeed, and how many records did it yield. A site that ran cleanly but
+    // returned nothing is a silent-empty sweep (e.g. a bad country_indeed) — we
+    // warn loudly rather than reporting an innocent-looking zero.
+    const siteOk = new Map();
+    const siteRecords = new Map();
 
     // One subprocess per (site × group). Sequential: parallel scrapes from the
     // same home IP are exactly what trips rate limits. Site-outer so each board's
@@ -132,13 +138,29 @@ export default {
         }
 
         anyOk = true;
-        for (const mapped of mapJobspyRecords(result.jobs)) {
+        siteOk.set(site.name, true);
+        const mappedRecords = mapJobspyRecords(result.jobs);
+        siteRecords.set(site.name, (siteRecords.get(site.name) || 0) + mappedRecords.length);
+        for (const mapped of mappedRecords) {
           if (seenUrls.has(mapped.url)) continue; // intra-fetch dedup (groups overlap)
           seenUrls.add(mapped.url);
           // `description` + `site` ride along so scan.mjs can persist the JD for
           // offers it keeps; the rest is the normalized job shape it filters on.
           jobs.push({ ...mapped, site: site.name });
         }
+      }
+    }
+
+    // Zero-result guard: a site whose calls all succeeded but returned zero rows
+    // is a silent-empty sweep — most often a bad country_indeed (the runner
+    // happily returns [] for an unknown country). Warn loudly per site so the
+    // failure is visible in the scan log instead of dissolving into the totals.
+    for (const site of sites) {
+      if (siteOk.get(site.name) && (siteRecords.get(site.name) || 0) === 0) {
+        const hint = site.name === 'indeed' && countryIndeed
+          ? ` — check country_indeed="${countryIndeed}" (jobspy returns [] for an unrecognized country)`
+          : '';
+        console.warn(`⚠️  jobspy ${site.name}: 0 results despite a successful scrape${hint}`);
       }
     }
 
@@ -208,7 +230,7 @@ export function normalizeSites(value) {
  * Rows without a usable URL or title are dropped. Exported for tests.
  *
  * @param {any} records
- * @returns {Array<{title: string, url: string, company: string, location: string, description: string}>}
+ * @returns {Array<{title: string, url: string, company: string, location: string, description: string, postedAt?: number}>}
  */
 export function mapJobspyRecords(records) {
   if (!Array.isArray(records)) return [];
@@ -218,15 +240,33 @@ export function mapJobspyRecords(records) {
     const title = String(r.title || '').trim();
     const url = String(r.url_direct || r.url || '').trim();
     if (!title || !url) continue;
-    out.push({
+    const job = {
       title,
       url,
       company: String(r.company || '').trim(),
       location: String(r.location || '').trim(),
       description: String(r.description || '').trim(),
-    });
+    };
+    // date_posted is "YYYY-MM-DD" (or empty). Carry it as an optional epoch-ms
+    // postedAt so freshness can be measured (e.g. the LinkedIn A/B harness).
+    const posted = parseDatePosted(r.date_posted);
+    if (posted != null) job.postedAt = posted;
+    out.push(job);
   }
   return out;
+}
+
+/**
+ * Parse jobspy's `date_posted` ("YYYY-MM-DD") to epoch ms, or null when absent
+ * or unparseable. Exported for unit tests.
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+export function parseDatePosted(value) {
+  const s = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return Number.isFinite(t) ? t : null;
 }
 
 // Spawn the python runner and resolve its parsed JSON envelope. Rejects on a

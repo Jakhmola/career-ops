@@ -2369,6 +2369,396 @@ try {
   fail(`ats-discover test crashed: ${e.message}`);
 }
 
+// ── 19. PROVIDER — linkedin-guest (native LinkedIn) ─────────────
+
+console.log('\n19. Provider — linkedin-guest');
+
+try {
+  const mod = await import(pathToFileURL(join(ROOT, 'providers/linkedin-guest.mjs')).href);
+  const { parseJobCards, buildSearchUrl, buildJobPostingUrl, parseJobDescription, normalizeQueries, normalizeGeos } = mod;
+
+  if (mod.default.id === 'linkedin-guest') pass('linkedin-guest.id is "linkedin-guest"');
+  else fail(`linkedin-guest.id is ${JSON.stringify(mod.default.id)}`);
+
+  if (typeof mod.default.detect === 'undefined') pass('linkedin-guest exports NO detect() (scraper rule)');
+  else fail('linkedin-guest must NOT export detect()');
+
+  const cardHtml = `
+    <li><div class="base-card base-search-card" data-entity-urn="urn:li:jobPosting:4431685722">
+      <a class="base-card__full-link" href="https://nl.linkedin.com/jobs/view/ai-ml-engineer-4431685722?position=1">
+        <span class="sr-only">AI/ML Engineer</span></a>
+      <h3 class="base-search-card__title">AI/ML Engineer</h3>
+      <h4 class="base-search-card__subtitle"><a class="hidden-nested-link" href="#">Brainbox &amp; Co</a></h4>
+      <span class="job-search-card__location">Eindhoven Area</span>
+      <time class="job-search-card__listdate--new" datetime="2026-06-22"></time>
+    </div></li>
+    <li><div class="base-card" data-entity-urn="urn:li:jobPosting:4426821239">
+      <a class="base-card__full-link" href="https://nl.linkedin.com/jobs/view/x-4426821239"></a>
+      <h3 class="base-search-card__title">Member of Technical Staff</h3>
+      <h4 class="base-search-card__subtitle"><a class="hidden-nested-link" href="#">Levy</a></h4>
+      <span class="job-search-card__location">Amsterdam, North Holland, Netherlands</span>
+    </div></li>`;
+  const cards = parseJobCards(cardHtml);
+  if (cards.length === 2) pass('parseJobCards extracts 2 cards');
+  else fail(`parseJobCards returned ${cards.length}`);
+
+  const c0 = cards[0] || {};
+  if (c0.id === '4431685722' && c0.url === 'https://www.linkedin.com/jobs/view/4431685722') {
+    pass('parseJobCards rebuilds canonical /jobs/view/<id> URL from the urn id');
+  } else {
+    fail(`card0 url = ${JSON.stringify(c0.url)} (id ${c0.id})`);
+  }
+  if (c0.title === 'AI/ML Engineer' && c0.company === 'Brainbox & Co' && c0.location === 'Eindhoven Area') {
+    pass('parseJobCards extracts title/company/location (entity-decoded)');
+  } else {
+    fail(`card0 fields = ${JSON.stringify({ t: c0.title, co: c0.company, loc: c0.location })}`);
+  }
+  if (c0.postedAt === Date.parse('2026-06-22T00:00:00Z')) pass('parseJobCards parses time[datetime] → postedAt epoch');
+  else fail(`card0 postedAt = ${c0.postedAt}`);
+  // Off-pattern title ("Member of Technical Staff") survives — the whole point of
+  // source-side filtering (the local title filter would later judge it).
+  if (cards[1]?.title === 'Member of Technical Staff') pass('parseJobCards keeps off-pattern titles');
+  else fail(`card1 title = ${JSON.stringify(cards[1]?.title)}`);
+
+  if (parseJobCards('<div>no cards here</div>').length === 0) pass('parseJobCards: no urn → empty');
+  else fail('parseJobCards should return [] when no cards');
+
+  // buildSearchUrl: source-side filters + sortBy + geoId-over-location
+  const u = buildSearchUrl({ keywords: 'AI Engineer', location: 'Netherlands', f_E: '2,3,4', f_F: 'eng,it', f_TPR: 'r604800', start: 25 });
+  if (/[?&]f_E=2%2C3%2C4/.test(u) && /[?&]f_F=eng%2Cit/.test(u) && /[?&]f_TPR=r604800/.test(u) && /[?&]sortBy=DD/.test(u) && /[?&]start=25/.test(u)) {
+    pass('buildSearchUrl emits f_E/f_F/f_TPR/sortBy/start');
+  } else {
+    fail(`buildSearchUrl = ${u}`);
+  }
+  const ug = buildSearchUrl({ keywords: 'x', location: 'Netherlands', geoId: '102890719' });
+  if (/[?&]geoId=102890719/.test(ug) && !/[?&]location=/.test(ug)) pass('buildSearchUrl uses geoId and omits location when geoId set');
+  else fail(`buildSearchUrl geoId = ${ug}`);
+
+  if (buildJobPostingUrl('123').endsWith('/jobPosting/123')) pass('buildJobPostingUrl builds the no-login JD URL');
+  else fail(`buildJobPostingUrl = ${buildJobPostingUrl('123')}`);
+
+  const desc = parseJobDescription('<div class="show-more-less-html__markup"><p>Build <b>RAG</b> systems.</p><ul><li>Python</li></ul></div>');
+  if (/Build RAG systems/.test(desc) && /Python/.test(desc)) pass('parseJobDescription extracts + cleans the JD markup');
+  else fail(`parseJobDescription = ${JSON.stringify(desc)}`);
+
+  if (JSON.stringify(normalizeQueries(['AI Engineer', ' ', null, 'ML'])) === JSON.stringify(['AI Engineer', 'ML'])) {
+    pass('normalizeQueries trims + drops blanks/non-strings');
+  } else {
+    fail(`normalizeQueries = ${JSON.stringify(normalizeQueries(['AI Engineer', ' ', null, 'ML']))}`);
+  }
+
+  const geos = normalizeGeos([{ where: 'Amsterdam', distance: 40 }, 'Netherlands', { f_WT: '2', where: 'European Union' }, {}]);
+  if (geos.length === 3 && geos[0].distance === 40 && geos[1].where === 'Netherlands' && geos[2].f_WT === '2') {
+    pass('normalizeGeos handles objects + bare strings, drops empties');
+  } else {
+    fail(`normalizeGeos = ${JSON.stringify(geos)}`);
+  }
+  if (normalizeGeos(undefined)[0].where === 'Netherlands') pass('normalizeGeos defaults to Netherlands when absent');
+  else fail('normalizeGeos should default to Netherlands');
+} catch (e) {
+  fail(`linkedin-guest tests crashed: ${e.message}`);
+}
+
+// ── 19b. JOBSPY postedAt mapping ────────────────────────────────
+
+console.log('\n19b. jobspy — date_posted → postedAt');
+
+try {
+  const { parseDatePosted, mapJobspyRecords } = await import(pathToFileURL(join(ROOT, 'providers/jobspy.mjs')).href);
+  if (parseDatePosted('2026-06-22') === Date.parse('2026-06-22T00:00:00Z')) pass('parseDatePosted: YYYY-MM-DD → epoch ms');
+  else fail(`parseDatePosted = ${parseDatePosted('2026-06-22')}`);
+  if (parseDatePosted('') === null && parseDatePosted('not-a-date') === null && parseDatePosted(null) === null) {
+    pass('parseDatePosted: blank/garbage → null');
+  } else {
+    fail('parseDatePosted should be null on bad input');
+  }
+  // Runner output keys are url / url_direct (the python runner maps jobspy's
+  // job_url/job_url_direct columns to these before mapJobspyRecords sees them).
+  const mapped = mapJobspyRecords([
+    { title: 'AI Eng', url: 'https://x/1', company: 'C', location: 'Amsterdam', date_posted: '2026-06-20' },
+    { title: 'ML Eng', url_direct: 'https://y/2', company: 'D', location: 'NL' },
+  ]);
+  if (mapped[0]?.postedAt === Date.parse('2026-06-20T00:00:00Z') && mapped[1]?.postedAt === undefined) {
+    pass('mapJobspyRecords carries postedAt only when date_posted present');
+  } else {
+    fail(`mapJobspyRecords postedAt = ${mapped[0]?.postedAt} / ${mapped[1]?.postedAt}`);
+  }
+} catch (e) {
+  fail(`jobspy postedAt tests crashed: ${e.message}`);
+}
+
+// ── 19c. playwright-scraper — proxy resolution ──────────────────
+
+console.log('\n19c. playwright-scraper — proxy resolution');
+
+try {
+  const { parseProxy, resolvePlaywrightProxy } = await import(pathToFileURL(join(ROOT, 'providers/playwright-scraper.mjs')).href);
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if (eq(parseProxy('http://u:p@1.2.3.4:8080'), { server: 'http://1.2.3.4:8080', username: 'u', password: 'p' })) {
+    pass('parseProxy splits URL credentials from server');
+  } else {
+    fail(`parseProxy creds = ${JSON.stringify(parseProxy('http://u:p@1.2.3.4:8080'))}`);
+  }
+  if (eq(parseProxy('socks5://10.0.0.1:1080'), { server: 'socks5://10.0.0.1:1080' })) pass('parseProxy keeps socks5 scheme');
+  else fail(`parseProxy socks5 = ${JSON.stringify(parseProxy('socks5://10.0.0.1:1080'))}`);
+  if (eq(parseProxy('1.2.3.4:3128'), { server: 'http://1.2.3.4:3128' })) pass('parseProxy defaults bare host:port to http');
+  else fail(`parseProxy bare = ${JSON.stringify(parseProxy('1.2.3.4:3128'))}`);
+  if (parseProxy('') === undefined && parseProxy(null) === undefined && parseProxy({}) === undefined) pass('parseProxy: empty/invalid → undefined');
+  else fail('parseProxy should be undefined for empty input');
+
+  const prevEnv = process.env.WERKNL_PROXY;
+  process.env.WERKNL_PROXY = 'http://env:1';
+  const envWins = resolvePlaywrightProxy({ config: { boards: [{ proxy: 'http://board:2' }] } });
+  if (envWins?.server === 'http://env:1') pass('resolvePlaywrightProxy: env WERKNL_PROXY wins over board proxy');
+  else fail(`resolvePlaywrightProxy env = ${JSON.stringify(envWins)}`);
+  delete process.env.WERKNL_PROXY;
+  if (prevEnv !== undefined) process.env.WERKNL_PROXY = prevEnv;
+  const boardProxy = resolvePlaywrightProxy({ config: { boards: [{ name: 'werknl', proxy: 'http://board:2' }] } });
+  if (boardProxy?.server === 'http://board:2') pass('resolvePlaywrightProxy falls back to a board proxy');
+  else fail(`resolvePlaywrightProxy board = ${JSON.stringify(boardProxy)}`);
+  if (resolvePlaywrightProxy({ config: { boards: [{ name: 'werknl' }] } }) === undefined) pass('resolvePlaywrightProxy: no proxy anywhere → undefined (direct/VPN)');
+  else fail('resolvePlaywrightProxy should be undefined when nothing set');
+} catch (e) {
+  fail(`playwright-scraper proxy tests crashed: ${e.message}`);
+}
+
+// ── 19d. RSS helper + werkeninai + datajobs aggregators ─────────
+
+console.log('\n19d. RSS aggregators — werkeninai + datajobs');
+
+try {
+  const { parseRssItems, rssDateToMs, decodeEntities } = await import(pathToFileURL(join(ROOT, 'providers/_rss.mjs')).href);
+  const { parseWerkeninai } = await import(pathToFileURL(join(ROOT, 'providers/werkeninai.mjs')).href);
+  const dj = await import(pathToFileURL(join(ROOT, 'providers/datajobs.mjs')).href);
+
+  const rss = `<rss><channel>
+    <item><title>AI Engineer &#8211; ACME</title><link>https://werkeninai.nl/ai-engineer-acme/</link>
+      <pubDate>Fri, 19 Jun 2026 15:12:22 +0000</pubDate>
+      <category><![CDATA[Fulltime]]></category><category><![CDATA[Amsterdam]]></category>
+      <category><![CDATA[ACME]]></category><category><![CDATA[vacature]]></category>
+      <description><![CDATA[<p>Bouw RAG systemen bij ACME.</p>]]></description></item>
+  </channel></rss>`;
+  const items = parseRssItems(rss);
+  if (items.length === 1 && items[0].title === 'AI Engineer – ACME' && items[0].categories.length === 4) {
+    pass('parseRssItems extracts title (entity-decoded) + categories');
+  } else {
+    fail(`parseRssItems = ${JSON.stringify(items[0])}`);
+  }
+  if (decodeEntities('A&#8211;B &amp; C &#124; D') === 'A–B & C | D') pass('decodeEntities decodes named + numeric entities');
+  else fail(`decodeEntities = ${decodeEntities('A&#8211;B &amp; C &#124; D')}`);
+  if (rssDateToMs('Fri, 19 Jun 2026 15:12:22 +0000') === Date.parse('Fri, 19 Jun 2026 15:12:22 +0000')) pass('rssDateToMs parses RFC-822');
+  else fail('rssDateToMs should parse RFC-822');
+
+  const wia = parseWerkeninai(rss);
+  if (wia[0]?.title === 'AI Engineer' && wia[0]?.company === 'ACME' && wia[0]?.location === 'Amsterdam') {
+    pass('parseWerkeninai splits "{Role} – {Employer}" + picks location category');
+  } else {
+    fail(`parseWerkeninai = ${JSON.stringify(wia[0])}`);
+  }
+  if (wia[0]?.description && /RAG systemen/.test(wia[0].description) && wia[0]?.postedAt) {
+    pass('parseWerkeninai captures JD snippet + postedAt');
+  } else {
+    fail(`parseWerkeninai jd/postedAt = ${JSON.stringify({ d: wia[0]?.description, p: wia[0]?.postedAt })}`);
+  }
+
+  if (dj.companyFromSlug('https://www.datajobs.nl/vacatures/ai-software-engineer-bij-van-lanschot-kempen') === 'Van Lanschot Kempen') {
+    pass('datajobs.companyFromSlug recovers employer after "-bij-"');
+  } else {
+    fail(`companyFromSlug = ${dj.companyFromSlug('https://www.datajobs.nl/vacatures/ai-software-engineer-bij-van-lanschot-kempen')}`);
+  }
+  if (dj.companyFromSlug('https://www.datajobs.nl/vacatures/no-marker-here') === '') pass('companyFromSlug returns "" without -bij-');
+  else fail('companyFromSlug should be "" without -bij-');
+  const djRss = `<rss><channel><item><title>Senior Data Scientist</title>
+    <link>https://www.datajobs.nl/vacatures/senior-data-scientist-bij-ing</link>
+    <pubDate>Fri, 19 Jun 2026 15:12:22 +0000</pubDate></item></channel></rss>`;
+  const djJobs = dj.parseDatajobs(djRss);
+  if (djJobs[0]?.title === 'Senior Data Scientist' && djJobs[0]?.company === 'Ing' && djJobs[0]?.url.includes('datajobs.nl')) {
+    pass('parseDatajobs maps title/url/company');
+  } else {
+    fail(`parseDatajobs = ${JSON.stringify(djJobs[0])}`);
+  }
+  // The feed mixes /blog/ editorial in with /vacatures/ — only vacancies are jobs.
+  const djMixed = `<rss><channel>
+    <item><title>Senior Data Scientist</title><link>https://www.datajobs.nl/vacatures/senior-data-scientist-bij-ing</link><pubDate>Fri, 19 Jun 2026 15:12:22 +0000</pubDate></item>
+    <item><title>Waarom AI-projecten niet mislukken</title><link>https://www.datajobs.nl/blog/waarom-ai-projecten</link><pubDate>Fri, 19 Jun 2026 15:12:22 +0000</pubDate></item>
+    </channel></rss>`;
+  const djMixedJobs = dj.parseDatajobs(djMixed);
+  if (djMixedJobs.length === 1 && djMixedJobs.every((j) => j.url.includes('/vacatures/'))) {
+    pass('parseDatajobs drops /blog/ articles, keeps only /vacatures/');
+  } else {
+    fail(`parseDatajobs blog filter = ${JSON.stringify(djMixedJobs.map((j) => j.url))}`);
+  }
+} catch (e) {
+  fail(`RSS aggregator tests crashed: ${e.message}`);
+}
+
+// ── 19e. aijobs aggregator (HTML cards + company detail) ────────
+
+console.log('\n19e. Provider — aijobs');
+
+try {
+  const { parseAijobsCards, parseAijobsCompany } = await import(pathToFileURL(join(ROOT, 'providers/aijobs.mjs')).href);
+  const html = `
+    <li class="d-flex justify-content-between">
+      <div><div><a class="font-monospace fw-bold stretched-link" href="/job/ai-engineer-remote-123/">
+        <span class="text-bg-primary">Featured</span><span class="text-bg-primary">Feat.</span>
+        AI Engineer</a><span class="text-bg-success">USD 100K</span></div></div>
+      <div class="text-end"><div><span class="text-bg-warning">Mid-level</span><span class="text-bg-secondary">Full Time</span></div>
+        <div>Remote <span class="text-bg-success">R</span></div>
+        <div class="text-muted">3d ago</div></div></li>
+    <li class="d-flex"><div><a class="stretched-link" href="/job/ml-engineer-amsterdam-456/">ML Engineer</a></div>
+      <div class="text-end"><div>Amsterdam</div><div class="text-muted">1d ago</div></div></li>`;
+  const cards = parseAijobsCards(html);
+  if (cards.length === 2) pass('parseAijobsCards extracts 2 cards');
+  else fail(`parseAijobsCards returned ${cards.length}`);
+  if (cards[0]?.title === 'AI Engineer' && cards[0]?.path === '/job/ai-engineer-remote-123/' && cards[0]?.location === 'Remote') {
+    pass('parseAijobsCards strips Featured badges, gets path + location (not the posted line)');
+  } else {
+    fail(`card0 = ${JSON.stringify(cards[0])}`);
+  }
+  if (cards[1]?.title === 'ML Engineer' && cards[1]?.location === 'Amsterdam') pass('parseAijobsCards reads a second card cleanly');
+  else fail(`card1 = ${JSON.stringify(cards[1])}`);
+
+  if (parseAijobsCompany('<a href="/company/micro1">@ micro1</a>') === 'micro1') pass('parseAijobsCompany strips the "@ " prefix');
+  else fail(`parseAijobsCompany = ${parseAijobsCompany('<a href="/company/micro1">@ micro1</a>')}`);
+  if (parseAijobsCompany('<div>no company link</div>') === '') pass('parseAijobsCompany returns "" when no company link');
+  else fail('parseAijobsCompany should be "" without a /company/ link');
+} catch (e) {
+  fail(`aijobs tests crashed: ${e.message}`);
+}
+
+// ── 19f. PROVIDER — linkedin-auth (authenticated LinkedIn) ───────
+
+console.log('\n19f. Provider — linkedin-auth');
+
+try {
+  const mod = await import(pathToFileURL(join(ROOT, 'providers/linkedin-auth.mjs')).href);
+  const {
+    parseAuthCards, buildAuthSearchUrl, buildViewUrl,
+    extractSalary, isCheckpointUrl, hasValidStorageState,
+    normalizeQueries, normalizeGeos,
+  } = mod;
+
+  if (mod.default.id === 'linkedin-auth') pass('linkedin-auth.id is "linkedin-auth"');
+  else fail(`linkedin-auth.id is ${JSON.stringify(mod.default.id)}`);
+
+  if (typeof mod.default.detect === 'undefined') pass('linkedin-auth exports NO detect() (scraper rule)');
+  else fail('linkedin-auth must NOT export detect()');
+
+  // Authed card markup: id is carried on BOTH the outer <li occludable> and the
+  // inner <div data-job-id> — the parser must collapse them to one card.
+  const authHtml = `
+    <li class="jobs-search-results__list-item" data-occludable-job-id="3850123456">
+      <div class="job-card-container" data-job-id="3850123456">
+        <a class="job-card-container__link job-card-list__title" href="/jobs/view/3850123456/?refId=x" aria-label="AI Engineer">
+          <span aria-hidden="true"><strong>AI Engineer</strong></span></a>
+        <div class="artdeco-entity-lockup__subtitle"><span>Brainbox &amp; Co</span></div>
+        <ul class="job-card-container__metadata-wrapper">
+          <li class="job-card-container__metadata-item">Amsterdam, North Holland, Netherlands</li></ul>
+        <ul class="job-card-container__footer-wrapper">
+          <li class="job-card-container__footer-item">€60,000/yr - €80,000/yr</li>
+          <li class="job-card-container__footer-job-state">Easy Apply</li></ul>
+        <time class="job-card-container__listed-time" datetime="2026-06-22">2 days ago</time>
+      </div></li>
+    <li data-occludable-job-id="3851000000"><div data-job-id="3851000000">
+      <a href="/jobs/view/3851000000/?trk=y" aria-label="Machine Learning Engineer">ML</a>
+      <div class="artdeco-entity-lockup__subtitle">Eindhoven Labs</div>
+      <div class="artdeco-entity-lockup__caption">Eindhoven, Netherlands</div>
+    </div></li>`;
+
+  const cards = parseAuthCards(authHtml);
+  if (cards.length === 2) pass('parseAuthCards collapses li+div double-anchor → 2 cards');
+  else fail(`parseAuthCards returned ${cards.length}: ${JSON.stringify(cards.map((c) => c.id))}`);
+
+  const a0 = cards[0] || {};
+  if (a0.id === '3850123456' && a0.url === 'https://www.linkedin.com/jobs/view/3850123456') {
+    pass('parseAuthCards rebuilds canonical /jobs/view/<id> URL');
+  } else {
+    fail(`card0 url = ${JSON.stringify(a0.url)} (id ${a0.id})`);
+  }
+  if (a0.title === 'AI Engineer' && a0.company === 'Brainbox & Co' && /Amsterdam/.test(a0.location || '')) {
+    pass('parseAuthCards extracts title (aria-label) / company / location');
+  } else {
+    fail(`card0 fields = ${JSON.stringify({ t: a0.title, co: a0.company, loc: a0.location })}`);
+  }
+  if (a0.postedAt === Date.parse('2026-06-22T00:00:00Z')) pass('parseAuthCards parses time[datetime] → postedAt');
+  else fail(`card0 postedAt = ${a0.postedAt}`);
+  if (/€60,000/.test(a0.salary || '') && /yr/.test(a0.salary || '')) pass('parseAuthCards captures the salary band (auth-only)');
+  else fail(`card0 salary = ${JSON.stringify(a0.salary)}`);
+  if (a0.easyApply === true) pass('parseAuthCards flags Easy Apply (auth-only)');
+  else fail(`card0 easyApply = ${a0.easyApply}`);
+
+  const a1 = cards[1] || {};
+  if (a1.title === 'Machine Learning Engineer' && a1.company === 'Eindhoven Labs' && /Eindhoven/.test(a1.location || '')) {
+    pass('parseAuthCards uses fallbacks (generic /jobs/view link aria, subtitle, caption)');
+  } else {
+    fail(`card1 fields = ${JSON.stringify({ t: a1.title, co: a1.company, loc: a1.location })}`);
+  }
+  if (a1.salary === undefined && a1.easyApply === undefined) pass('parseAuthCards omits salary/easyApply when absent');
+  else fail(`card1 extras leaked = ${JSON.stringify({ s: a1.salary, e: a1.easyApply })}`);
+
+  if (parseAuthCards('<div>no job ids</div>').length === 0) pass('parseAuthCards: no job-id → empty');
+  else fail('parseAuthCards should return [] when no job-id anchors');
+
+  // extractSalary — STRICT: real salary shapes only, no €0/$300 noise (the bug
+  // that made the first eval report "100% salary, all €0 M").
+  if (/€60,000/.test(extractSalary('<li>€60,000/yr - €80,000/yr</li>'))) pass('extractSalary reads a real banded salary');
+  else fail(`extractSalary band = ${JSON.stringify(extractSalary('<li>€60,000/yr - €80,000/yr</li>'))}`);
+  if (extractSalary('$120K/yr') === '$120K/yr') pass('extractSalary reads a K-suffixed salary');
+  else fail(`extractSalary K = ${JSON.stringify(extractSalary('$120K/yr'))}`);
+  if (extractSalary('€0') === '' && extractSalary('see €0 and $300 credit here') === '') pass('extractSalary rejects €0 / bare-amount noise');
+  else fail(`extractSalary noise leaked = ${JSON.stringify([extractSalary('€0'), extractSalary('see €0 and $300 credit here')])}`);
+  if (extractSalary('No pay shown here at all') === '') pass('extractSalary returns "" when no salary cue');
+  else fail(`extractSalary false-positive = ${JSON.stringify(extractSalary('No pay shown here at all'))}`);
+
+  // buildAuthSearchUrl — /jobs/search/ + source-side filters + geoId precedence.
+  const u = buildAuthSearchUrl({ keywords: 'AI Engineer', location: 'Netherlands', f_E: '2,3,4', f_WT: '2', f_TPR: 'r604800', start: 25 });
+  if (/\/jobs\/search\/\?/.test(u) && /[?&]f_E=2%2C3%2C4/.test(u) && /[?&]f_WT=2/.test(u) && /[?&]f_TPR=r604800/.test(u) && /[?&]sortBy=DD/.test(u) && /[?&]start=25/.test(u)) {
+    pass('buildAuthSearchUrl emits /jobs/search/ + f_E/f_WT/f_TPR/sortBy/start');
+  } else {
+    fail(`buildAuthSearchUrl = ${u}`);
+  }
+  const ug = buildAuthSearchUrl({ keywords: 'x', location: 'NL', geoId: '102890719' });
+  if (/[?&]geoId=102890719/.test(ug) && !/[?&]location=/.test(ug)) pass('buildAuthSearchUrl uses geoId, omits location when set');
+  else fail(`buildAuthSearchUrl geoId = ${ug}`);
+  if (buildViewUrl('123').endsWith('/jobs/view/123')) pass('buildViewUrl builds the canonical detail URL');
+  else fail(`buildViewUrl = ${buildViewUrl('123')}`);
+
+  // isCheckpointUrl — session-dead detection.
+  const ckTrue = ['https://www.linkedin.com/checkpoint/challenge/x', 'https://www.linkedin.com/authwall?x=1', 'https://www.linkedin.com/login'];
+  const ckFalse = ['https://www.linkedin.com/jobs/search/?keywords=x', 'https://www.linkedin.com/jobs/view/123'];
+  if (ckTrue.every(isCheckpointUrl) && !ckFalse.some(isCheckpointUrl)) pass('isCheckpointUrl flags login/checkpoint/authwall, not job pages');
+  else fail(`isCheckpointUrl misclassified: ${JSON.stringify({ t: ckTrue.map(isCheckpointUrl), f: ckFalse.map(isCheckpointUrl) })}`);
+
+  // hasValidStorageState — cookie-presence gate.
+  const os = await import('os');
+  const fs = await import('fs');
+  const tmpOk = join(os.tmpdir(), `ls-ok-${process.pid}.json`);
+  const tmpBad = join(os.tmpdir(), `ls-bad-${process.pid}.json`);
+  fs.writeFileSync(tmpOk, JSON.stringify({ cookies: [{ name: 'li_at', value: 'x' }], origins: [] }));
+  fs.writeFileSync(tmpBad, 'not json at all');
+  try {
+    if (hasValidStorageState(tmpOk) === true) pass('hasValidStorageState true for a cookie-bearing session file');
+    else fail('hasValidStorageState should be true for a valid session');
+    if (hasValidStorageState(tmpBad) === false) pass('hasValidStorageState false for non-JSON');
+    else fail('hasValidStorageState should be false for non-JSON');
+    if (hasValidStorageState(join(os.tmpdir(), `nope-${process.pid}.json`)) === false) pass('hasValidStorageState false for a missing file');
+    else fail('hasValidStorageState should be false for a missing file');
+  } finally {
+    try { fs.unlinkSync(tmpOk); } catch {}
+    try { fs.unlinkSync(tmpBad); } catch {}
+  }
+
+  // normalizeQueries / normalizeGeos — shared shape with linkedin-guest.
+  if (JSON.stringify(normalizeQueries(['AI', ' ', null, 'ML'])) === JSON.stringify(['AI', 'ML'])) pass('normalizeQueries trims + drops blanks');
+  else fail(`normalizeQueries = ${JSON.stringify(normalizeQueries(['AI', ' ', null, 'ML']))}`);
+  const geos = normalizeGeos([{ where: 'Amsterdam', distance: 40 }, 'Netherlands', { where: 'European Union', f_WT: '2' }, {}]);
+  if (geos.length === 3 && geos[0].distance === 40 && geos[2].f_WT === '2') pass('normalizeGeos handles objects + strings, drops empties');
+  else fail(`normalizeGeos = ${JSON.stringify(geos)}`);
+} catch (e) {
+  fail(`linkedin-auth tests crashed: ${e.message}`);
+}
+
 // ── SUMMARY ─────────────────────────────────────────────────────
 
 console.log('\n' + '='.repeat(50));
