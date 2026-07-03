@@ -118,3 +118,19 @@ package-lock.json
 
 # Planning (local scratchpad)
 plan/
+
+# Root one-off / probe scripts (the _-prefix temp convention; providers/_*.mjs
+# are real shared modules and are NOT matched by this root-anchored rule).
+/_*.mjs
+
+# Batch working scratch — ephemeral dated run dirs, resume/archive snapshots, and
+# state files. Only batch-prompt.md, batch-runner.sh, README.md and the
+# .gitkeep-tracked logs/ + tracker-additions/ dirs are committed (CLAUDE.md:
+# "batch/ is gitignored except scripts and prompt").
+batch/_*/
+batch/deep-*/
+batch/scan-*/
+batch/tmp/
+batch/*-state.md
+batch/pdf-batch-worklist*.json
+batch/pdf-worker-spec.md
