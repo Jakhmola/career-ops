@@ -20,6 +20,9 @@
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+// Safe to import: scan.mjs has a direct-run guard; import side effects are
+// dotenv/config plus an idempotent mkdirSync('data').
+import { canonicalizeUrl } from './scan.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SCAN_HISTORY_PATH = join(ROOT, 'data', 'scan-history.tsv');
@@ -33,7 +36,8 @@ export function normalizeSource(portal) {
   if (!p) return 'unknown';
   if (p.startsWith('websearch')) return 'websearch';
   if (p.includes('—') || p.includes(' - ')) return 'websearch'; // named search_queries entries
-  if (p === 'jobspy' || p.startsWith('jobspy')) return 'jobspy';
+  if (p.startsWith('jobspy:')) return p; // per-board granularity: linkedin vs indeed have very different noise profiles
+  if (p.startsWith('jobspy')) return 'jobspy'; // bare/legacy spellings
   if (p.endsWith('-api') || p.endsWith('-scan')) return `ats:${p.replace(/-(api|scan)$/, '')}`;
   if (p === 'local-parser') return 'ats:local-parser';
   if (p === 'playwright' || p.startsWith('playwright')) return 'playwright-board';
@@ -64,7 +68,7 @@ function loadReportUrlIndex() {
   if (!existsSync(REPORTS_DIR)) return index;
   for (const file of readdirSync(REPORTS_DIR)) {
     if (!file.endsWith('.md') || file.endsWith('-RESERVED.md')) continue;
-    const numMatch = file.match(/^(\d{3})-/);
+    const numMatch = file.match(/^(\d{3,})-/); // reports are past #1000 — 3-digit-only silently drops them
     if (!numMatch) continue;
     let head;
     try {
@@ -76,7 +80,9 @@ function loadReportUrlIndex() {
     const urlMatch = head.match(/\*\*URL:\*\*\s*(\S+)/);
     if (!urlMatch) continue;
     const scoreMatch = head.match(/\*\*(?:Score|Puntuación):\*\*\s*([\d.]+)/i);
-    index.set(stripUrl(urlMatch[1]), {
+    // canonicalizeUrl first (LinkedIn locale/slug/currentJobId variants), then
+    // stripUrl for the light protocol/www/tracking normalization.
+    index.set(stripUrl(canonicalizeUrl(urlMatch[1])), {
       reportNum: numMatch[1],
       score: scoreMatch ? Number(scoreMatch[1]) : null,
     });
@@ -148,7 +154,7 @@ export function buildStats(rows, reportIndex, trackerIndex) {
     s.byStatus[row.status] = (s.byStatus[row.status] || 0) + 1;
     if (row.firstSeen) s.days.add(row.firstSeen);
 
-    const report = reportIndex.get(stripUrl(row.url));
+    const report = reportIndex.get(stripUrl(canonicalizeUrl(row.url)));
     if (report) {
       s.evaluated++;
       if (report.score != null) {

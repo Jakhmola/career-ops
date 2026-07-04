@@ -156,9 +156,9 @@ function readFile(path, label) {
 function nextReportNumber() {
   if (!existsSync(PATHS.reports)) return '001';
   const files = readdirSync(PATHS.reports)
-    .filter(f => /^\d{3}-/.test(f))
-    .map(f => parseInt(f.slice(0, 3)))
-    .filter(n => !isNaN(n));
+    .map(f => f.match(/^(\d{3,})-/)) // reports are past #1000 — slice(0,3) collided
+    .filter(Boolean)
+    .map(m => parseInt(m[1], 10));
   if (files.length === 0) return '001';
   return String(Math.max(...files) + 1).padStart(3, '0');
 }
