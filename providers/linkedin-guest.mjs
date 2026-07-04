@@ -154,15 +154,20 @@ export default {
       }
     }
 
-    // JD enrichment for the survivors. Volume stays small because f_F+f_E pre-
-    // filter server-side, so fetch-all is within rate limits. Failures are
-    // non-fatal — the role still enters the pipeline with its LinkedIn URL.
+    // Every card gets an on-demand JD closure — when fetch_description is
+    // false, scan.mjs's kept-row hook calls job.fetchJd() for rows that survive
+    // filters/dedup (budgeted by max_jd_fetches), so "false" now means
+    // "kept-rows only", not "never".
+    attachJdFetchers(jobs, opts.delayMs);
+
+    // fetch_description: true → inline bulk fetch for ALL cards at scrape time.
+    // Volume stays small because f_F+f_E pre-filter server-side, so fetch-all is
+    // within rate limits. Failures are non-fatal — the role still enters the
+    // pipeline with its LinkedIn URL.
     if (opts.fetchDescription) {
       for (const job of jobs) {
-        await sleep(jitter(opts.delayMs));
         try {
-          const detailHtml = await fetchWithRetry(buildJobPostingUrl(job.id));
-          const desc = parseJobDescription(detailHtml);
+          const desc = await job.fetchJd();
           if (desc) job.description = desc;
         } catch (err) {
           console.error(`⚠️  linkedin-guest JD [${job.id}]: ${err.message}`);
@@ -332,6 +337,27 @@ export function parseJobDescription(html) {
   return markup ? htmlToText(markup) : '';
 }
 
+/**
+ * Attach a per-job on-demand JD closure. Both LinkedIn providers (guest + auth)
+ * use this so scan.mjs's kept-row hook (job.fetchJd()) enriches only the rows
+ * that survive filters/dedup — via the PUBLIC jobPosting/<id> endpoint
+ * (anonymous fetch: no login, zero burner exposure), jittered base..2*base
+ * pacing per call.
+ *
+ * @param {Array<{id: string|number, fetchJd?: () => Promise<string>}>} jobs
+ * @param {number} [delayMs]
+ * @returns {typeof jobs}
+ */
+export function attachJdFetchers(jobs, delayMs = DEFAULTS.delayMs) {
+  for (const job of jobs) {
+    job.fetchJd = async () => {
+      await sleep(jitter(delayMs));
+      return parseJobDescription(await fetchWithRetry(buildJobPostingUrl(job.id)));
+    };
+  }
+  return jobs;
+}
+
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 function posInt(value, fallback) {
@@ -371,7 +397,7 @@ const jitter = (base) => Math.round(base + Math.random() * base);
  * @param {{retries?: number, timeoutMs?: number}} [opts]
  * @returns {Promise<string>}
  */
-async function fetchWithRetry(url, { retries = 3, timeoutMs = 15000 } = {}) {
+export async function fetchWithRetry(url, { retries = 3, timeoutMs = 15000 } = {}) {
   let attempt = 0;
   for (;;) {
     const controller = new AbortController();

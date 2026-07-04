@@ -5,8 +5,10 @@
 // reaches what the public guest API can't: salary bands, applicant counts, the
 // Easy-Apply flag, and a deeper result tail. It is the THIRD LinkedIn source,
 // ADDITIVE to the keep-both pair (jobspy-linkedin + linkedin-guest, decided
-// 2026-06-24); it ships DORMANT (enabled:false in portals.yml) until the eval
-// harness (scan-ab-linkedin-auth.mjs) shows it earns a slot.
+// 2026-06-24). ENABLED and run EVERY scan (user decision 2026-07-03, after the
+// eval harness showed a real unique discovery slice) — ban-risk containment is
+// the per-run guardrails below (pacing, daily_cap, checkpoint-abort,
+// cookie-first), NOT frequency gating.
 //
 // ── Why a browser + login (vs the guest provider) ────────────────────────────
 // linkedin-guest hits a PUBLIC door (jobs-guest/...) with plain fetch and gets
@@ -41,7 +43,9 @@ import { readFileSync, existsSync } from 'fs';
 // JD enrichment reuses linkedin-guest's PUBLIC jobPosting endpoint (stable, no
 // login, anonymous fetch) instead of scraping the authed detail page — see the
 // "Why JD comes from the guest endpoint" note on the enrichment block below.
-import { buildJobPostingUrl, parseJobDescription } from './linkedin-guest.mjs';
+// attachJdFetchers wraps that endpoint (buildJobPostingUrl + fetchWithRetry +
+// parseJobDescription) in a per-job fetchJd() closure shared by both providers.
+import { attachJdFetchers } from './linkedin-guest.mjs';
 
 // ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -52,15 +56,6 @@ const VIEW_BASE = 'https://www.linkedin.com/jobs/view/';
 const USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 const VIEWPORT = { width: 1366, height: 900 };
-
-// Browser-like headers for the anonymous guest JD fetch (no cookie sent).
-const GUEST_HEADERS = {
-  'User-Agent': USER_AGENT,
-  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'X-Requested-With': 'XMLHttpRequest',
-  Referer: 'https://www.linkedin.com/jobs',
-};
 
 // ── Defaults (overridable per portals.yml scrapers.linkedin-auth) ─────────────
 
@@ -80,9 +75,10 @@ const DEFAULTS = {
   // hits the anonymous guest endpoint, NOT the authed browser, so it doesn't burn
   // burner exposure and isn't capped here).
   dailyCap: 80,
-  // Enrich each kept card with its full JD via the PUBLIC guest jobPosting
-  // endpoint (anonymous fetch, no browser, no login). OFF by default at scan time
-  // (recovered at eval, like linkedin-guest); the eval harness turns it on.
+  // JD via the PUBLIC guest jobPosting endpoint (anonymous fetch, no browser,
+  // no login). false = kept-rows only: scan.mjs calls each surviving row's
+  // fetchJd() closure (budgeted by max_jd_fetches). true = inline bulk fetch of
+  // EVERY card at scrape time (the eval harness uses that).
   fetchDescription: false,
 };
 
@@ -220,30 +216,35 @@ export default {
         }
       }
 
-      // ── Optional JD enrichment (via the PUBLIC guest endpoint) ──────────────
-      // Why not the authed /jobs/view detail page? LinkedIn moved it to SDUI
-      // (server-driven UI, hashed classes, no stable JD hook, applicant count not
-      // in the static HTML) — scraping it is brittle AND every visit is more
-      // burner exposure. Each kept card already has a canonical /jobs/view/<id>
-      // URL, and LinkedIn's PUBLIC jobPosting endpoint serves that JD with NO
-      // login. So we enrich JD anonymously (no cookie, no browser) — same source
-      // linkedin-guest uses — which is both more robust and zero burner risk.
-      // Salary/applicant counts are NOT reliably scrapeable from the SDUI page,
-      // so we don't claim them (see the eval report).
-      if (!aborted && opts.fetchDescription) {
-        for (const job of jobs) {
-          await sleep(jitter(2500)); // gentle pacing on the public endpoint
-          try {
-            const detailHtml = await fetchGuestJd(job.id);
-            const desc = parseJobDescription(detailHtml);
-            if (desc) job.description = desc;
-          } catch (err) {
-            console.error(`⚠️  linkedin-auth JD [${job.id}]: ${err.message}`);
-          }
-        }
-      }
     } finally {
       await browser?.close();
+    }
+
+    // ── JD closures + optional inline enrichment (PUBLIC guest endpoint) ──────
+    // Why not the authed /jobs/view detail page? LinkedIn moved it to SDUI
+    // (server-driven UI, hashed classes, no stable JD hook, applicant count not
+    // in the static HTML) — scraping it is brittle AND every visit is more
+    // burner exposure. Each kept card already has a canonical /jobs/view/<id>
+    // URL, and LinkedIn's PUBLIC jobPosting endpoint serves that JD with NO
+    // login. So JD comes anonymously (no cookie, no browser) — same source
+    // linkedin-guest uses — which is both more robust and zero burner risk.
+    // Salary/applicant counts are NOT reliably scrapeable from the SDUI page,
+    // so we don't claim them (see the eval report).
+    //
+    // Every card gets the on-demand closure; with fetch_description: false,
+    // scan.mjs's kept-row hook calls job.fetchJd() for rows that survive
+    // filters/dedup (budgeted by max_jd_fetches) — gentle ~2.5-5s pacing lives
+    // inside the closure.
+    attachJdFetchers(jobs);
+    if (!aborted && opts.fetchDescription) {
+      for (const job of jobs) {
+        try {
+          const desc = await job.fetchJd();
+          if (desc) job.description = desc;
+        } catch (err) {
+          console.error(`⚠️  linkedin-auth JD [${job.id}]: ${err.message}`);
+        }
+      }
     }
 
     return jobs;
@@ -314,27 +315,6 @@ async function harvestSearchCards(page, url, { settleMs = 2500, maxScrolls = 16 
     }
   }
   return [...fragments.values()].join('\n');
-}
-
-/**
- * Fetch a job's JD HTML from LinkedIn's PUBLIC guest jobPosting endpoint —
- * anonymous (no cookie), so it costs no burner exposure. Throws on non-2xx.
- * @param {string|number} id
- * @returns {Promise<string>}
- */
-async function fetchGuestJd(id, { timeoutMs = 15000 } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(buildJobPostingUrl(id), {
-      headers: GUEST_HEADERS,
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 /**
@@ -590,6 +570,8 @@ function tidyTitle(raw) {
 /**
  * True when the storageState path holds a usable Playwright session (parseable
  * JSON with at least one cookie). Invalid/empty → treated as "no session".
+ * WARNS (does not skip) when the li_at auth cookie has <14 days left — a stale
+ * session dies mid-scan as a checkpoint-abort, so nudge the refresh early.
  * @param {string} pathStr
  * @returns {boolean}
  */
@@ -597,7 +579,19 @@ export function hasValidStorageState(pathStr) {
   try {
     if (!existsSync(pathStr)) return false;
     const parsed = JSON.parse(readFileSync(pathStr, 'utf-8'));
-    return Array.isArray(parsed?.cookies) && parsed.cookies.length > 0;
+    if (!Array.isArray(parsed?.cookies) || parsed.cookies.length === 0) return false;
+    const liAt = parsed.cookies.find((c) => c?.name === 'li_at');
+    // Playwright stores `expires` as epoch SECONDS (-1 = session cookie).
+    if (liAt && Number.isFinite(liAt.expires) && liAt.expires > 0) {
+      const daysLeft = Math.floor((liAt.expires * 1000 - Date.now()) / 86400000);
+      if (daysLeft < 14) {
+        console.warn(
+          `⚠️  linkedin-auth: li_at session cookie expires in ${Math.max(daysLeft, 0)} day(s) — ` +
+            'run `node linkedin-login.mjs` to refresh it before it dies mid-scan.',
+        );
+      }
+    }
+    return true;
   } catch {
     return false;
   }
