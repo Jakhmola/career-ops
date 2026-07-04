@@ -1122,6 +1122,19 @@ if (fileExists('providers/local-parser.mjs')) {
   fail('local-parser provider module is missing');
 }
 
+// Kept-row JD fetch hook: fetchJd() runs only for kept rows, guarded by
+// dry-run and the per-provider max_jd_fetches budget, before persistJd.
+if (
+  scanScript.includes("typeof job.fetchJd === 'function'") &&
+  scanScript.includes('!dryRun && jdFetchesLeft > 0') &&
+  scanScript.includes('scrConfig.max_jd_fetches') &&
+  scanScript.indexOf('job.fetchJd') < scanScript.indexOf('persistJd(offer, job, scrId)')
+) {
+  pass('scan.mjs kept-row JD fetch hook is budgeted, dry-run-safe, and precedes persistJd');
+} else {
+  fail('scan.mjs kept-row JD fetch hook missing or unguarded (fetchJd/max_jd_fetches/dryRun)');
+}
+
 // pipeline.md location column (B1): formatPipelineOffer appends location as a
 // 4th pipe-delimited column when present, and degrades to the original 3-column
 // form when the ATS exposes no location.
@@ -4836,6 +4849,8 @@ try {
     ['greenhouse-api', 'ats:greenhouse'],
     ['lever-scan', 'ats:lever'],
     ['jobspy', 'jobspy'],
+    ['jobspy:linkedin', 'jobspy:linkedin'], // per-board granularity survives
+    ['jobspy:indeed', 'jobspy:indeed'],
     ['careerjet', 'careerjet'],
     ['', 'unknown'],
   ];
@@ -4938,6 +4953,11 @@ try {
     // LinkedIn id is the identity (slash and query variants collapse)
     ['https://www.linkedin.com/jobs/view/4425634561/?trk=feed', 'https://linkedin.com/jobs/view/4425634561'],
     ['https://linkedin.com/jobs/view/4425634561', 'https://linkedin.com/jobs/view/4425634561'],
+    // locale subdomains + slugged paths + currentJobId search links collapse too
+    ['https://nl.linkedin.com/jobs/view/ai-engineer-at-acme-4425634561?position=3',
+      'https://linkedin.com/jobs/view/4425634561'],
+    ['https://www.linkedin.com/jobs/search/?currentJobId=4425634561&keywords=ai',
+      'https://linkedin.com/jobs/view/4425634561'],
     // identity params survive (gh_jid on embedded Greenhouse boards)
     ['https://miro.com/careers/vacancy/8189372002?gh_jid=8189372002&utm_source=x',
       'https://miro.com/careers/vacancy/8189372002?gh_jid=8189372002'],
@@ -5083,6 +5103,18 @@ try {
   }
   if (normalizeGeos(undefined)[0].where === 'Netherlands') pass('normalizeGeos defaults to Netherlands when absent');
   else fail('normalizeGeos should default to Netherlands');
+
+  // WS4: fetchWithRetry is exported (linkedin-auth reuses it via attachJdFetchers).
+  if (typeof mod.fetchWithRetry === 'function') pass('fetchWithRetry is exported');
+  else fail('fetchWithRetry should be an exported function');
+
+  // WS4: attachJdFetchers gives every job a fetchJd closure (scan.mjs kept-row hook).
+  const jdJobs = mod.attachJdFetchers([{ id: '111' }, { id: '222', description: 'already has one' }]);
+  if (typeof mod.attachJdFetchers === 'function' && jdJobs.every((j) => typeof j.fetchJd === 'function')) {
+    pass('attachJdFetchers attaches a fetchJd() closure to every job');
+  } else {
+    fail('attachJdFetchers should attach fetchJd to every job');
+  }
 } catch (e) {
   fail(`linkedin-guest tests crashed: ${e.message}`);
 }
@@ -5113,6 +5145,41 @@ try {
   }
 } catch (e) {
   fail(`jobspy postedAt tests crashed: ${e.message}`);
+}
+
+// ── 19b2. JOBSPY normalizeSites — glassdoor + is_remote (WS5) ───
+
+console.log('\n19b2. jobspy — normalizeSites glassdoor + is_remote');
+
+try {
+  const { normalizeSites } = await import(pathToFileURL(join(ROOT, 'providers/jobspy.mjs')).href);
+  const gd = normalizeSites([{ name: 'glassdoor', results_wanted: 100 }, 'glassdoor']);
+  if (gd.length === 1 && gd[0].name === 'glassdoor' && gd[0].results_wanted === 100) {
+    pass('normalizeSites accepts glassdoor (object + string form, deduped)');
+  } else {
+    fail(`normalizeSites glassdoor = ${JSON.stringify(gd)}`);
+  }
+  const twoPass = normalizeSites([
+    { name: 'indeed', results_wanted: 300 },
+    { name: 'indeed', is_remote: true, results_wanted: 100 },
+  ]);
+  if (twoPass.length === 2 && twoPass[0].is_remote === undefined && twoPass[1].is_remote === true
+      && twoPass[1].results_wanted === 100) {
+    pass('normalizeSites carries is_remote and keeps the second indeed pass');
+  } else {
+    fail(`normalizeSites indeed×2 = ${JSON.stringify(twoPass)}`);
+  }
+  const dup = normalizeSites([{ name: 'indeed' }, { name: 'indeed' }]);
+  if (dup.length === 1) pass('normalizeSites still drops exact duplicate sites');
+  else fail(`normalizeSites dup = ${JSON.stringify(dup)}`);
+  const defaults = normalizeSites([{ name: 'bogus' }]);
+  if (defaults.length === 3 && !defaults.some((s) => s.name === 'glassdoor' || s.is_remote)) {
+    pass('normalizeSites defaults unchanged (no glassdoor, no is_remote)');
+  } else {
+    fail(`normalizeSites defaults = ${JSON.stringify(defaults)}`);
+  }
+} catch (e) {
+  fail(`jobspy normalizeSites WS5 tests crashed: ${e.message}`);
 }
 
 // ── 19c. playwright-scraper — proxy resolution ──────────────────
@@ -5148,6 +5215,79 @@ try {
   else fail('resolvePlaywrightProxy should be undefined when nothing set');
 } catch (e) {
   fail(`playwright-scraper proxy tests crashed: ${e.message}`);
+}
+
+// ── 19c2. playwright-scraper — werk.nl parsers (WS3) ────────────
+
+console.log('\n19c2. playwright-scraper — werk.nl parsers');
+
+try {
+  const { parseWerkNlResponse } = await import(pathToFileURL(join(ROOT, 'providers/playwright-scraper.mjs')).href);
+
+  const listJobs = parseWerkNlResponse({
+    items: [
+      { referenceNumber: 9876543, vacatureTitle: 'Machine Learning Engineer', organisation: 'Acme BV', workLocationCity: 'AMSTERDAM' },
+      { referenceNumber: '123', vacatureTitle: 'Ref must be numeric' },
+      { vacatureTitle: 'No reference number' },
+      { referenceNumber: 1111111 },
+      null,
+    ],
+    totalResults: 5,
+  });
+  if (listJobs.length === 1) pass('parseWerkNlResponse keeps only items with numeric ref + title');
+  else fail(`parseWerkNlResponse kept ${listJobs.length} items`);
+  const lj = listJobs[0] || {};
+  if (lj.url === 'https://www.werk.nl/nl/vacatures/9876543' && lj.title === 'Machine Learning Engineer'
+      && lj.company === 'Acme BV' && lj.location === 'Amsterdam' && lj.description === '') {
+    pass('parseWerkNlResponse builds public URL + title-cases ALL-CAPS city, empty description');
+  } else {
+    fail(`parseWerkNlResponse job = ${JSON.stringify(lj)}`);
+  }
+  if (parseWerkNlResponse(null).length === 0 && parseWerkNlResponse({}).length === 0
+      && parseWerkNlResponse({ items: 'nope' }).length === 0) {
+    pass('parseWerkNlResponse: null/empty/malformed → []');
+  } else {
+    fail('parseWerkNlResponse should return [] on bad input');
+  }
+
+  // Detail endpoint → JD text (shape captured live 2026-07-04: JD in
+  // proposition.function.description, plain text; top-level description null).
+  const { parseWerkNlDetail } = await import(pathToFileURL(join(ROOT, 'providers/playwright-scraper.mjs')).href);
+  const detailJd = parseWerkNlDetail({
+    referenceNumber: 70165434,
+    title: 'Data Analyst',
+    description: null,
+    proposition: {
+      workLocation: { city: 'UTRECHT' },
+      function: {
+        code: '1000405854',
+        name: 'Data analist',
+        description: 'Zet data om in inzichten. \n Wij zoeken een Data Analyst met Python &amp; SQL.',
+        customDescription: 'Data analist',
+      },
+    },
+  });
+  if (/Zet data om in inzichten/.test(detailJd) && /Python & SQL/.test(detailJd)) {
+    pass('parseWerkNlDetail extracts proposition.function.description (entity-decoded)');
+  } else {
+    fail(`parseWerkNlDetail = ${JSON.stringify(detailJd)}`);
+  }
+  const topLevel = parseWerkNlDetail({
+    description: '<p>Employer-written <b>full</b> text.</p>',
+    proposition: { function: { description: 'fallback text' } },
+  });
+  if (/Employer-written full text\./.test(topLevel) && !/fallback/.test(topLevel)) {
+    pass('parseWerkNlDetail prefers top-level description when present + strips HTML');
+  } else {
+    fail(`parseWerkNlDetail top-level = ${JSON.stringify(topLevel)}`);
+  }
+  if (parseWerkNlDetail(null) === '' && parseWerkNlDetail({}) === '' && parseWerkNlDetail({ proposition: {} }) === '') {
+    pass('parseWerkNlDetail: null/empty/missing fields → ""');
+  } else {
+    fail('parseWerkNlDetail should return "" on bad input');
+  }
+} catch (e) {
+  fail(`playwright-scraper werk.nl parser tests crashed: ${e.message}`);
 }
 
 // ── 19d. RSS helper + werkeninai + datajobs aggregators ─────────
@@ -5375,6 +5515,35 @@ try {
   } finally {
     try { fs.unlinkSync(tmpOk); } catch {}
     try { fs.unlinkSync(tmpBad); } catch {}
+  }
+
+  // WS4: near-expiry li_at → still valid (WARN, not skip), pointing at linkedin-login.mjs.
+  const tmpSoon = join(os.tmpdir(), `ls-soon-${process.pid}.json`);
+  const tmpFar = join(os.tmpdir(), `ls-far-${process.pid}.json`);
+  fs.writeFileSync(tmpSoon, JSON.stringify({
+    cookies: [{ name: 'li_at', value: 'x', expires: Math.floor(Date.now() / 1000) + 5 * 86400 }],
+    origins: [],
+  }));
+  fs.writeFileSync(tmpFar, JSON.stringify({
+    cookies: [{ name: 'li_at', value: 'x', expires: Math.floor(Date.now() / 1000) + 300 * 86400 }],
+    origins: [],
+  }));
+  const origWarn = console.warn;
+  try {
+    let warns = [];
+    console.warn = (...a) => warns.push(a.join(' '));
+    if (hasValidStorageState(tmpSoon) === true) pass('hasValidStorageState stays TRUE on a near-expiry li_at (warn, not skip)');
+    else fail('near-expiry li_at must not invalidate the session');
+    if (warns.some((w) => /li_at/.test(w) && /linkedin-login\.mjs/.test(w))) pass('near-expiry li_at warns + points at linkedin-login.mjs');
+    else fail(`expected a li_at expiry warning, got: ${JSON.stringify(warns)}`);
+    warns = [];
+    hasValidStorageState(tmpFar);
+    if (warns.length === 0) pass('healthy li_at expiry emits no warning');
+    else fail(`unexpected warning on healthy expiry: ${JSON.stringify(warns)}`);
+  } finally {
+    console.warn = origWarn;
+    try { fs.unlinkSync(tmpSoon); } catch {}
+    try { fs.unlinkSync(tmpFar); } catch {}
   }
 
   // normalizeQueries / normalizeGeos — shared shape with linkedin-guest.
@@ -9220,6 +9389,114 @@ try {
 
 } catch (e) {
   fail(`workingnomads provider tests crashed: ${e.message}`);
+}
+
+// ── 48b. Provider — remoteok ────────────────────────────────────
+console.log('\n48b. Provider — remoteok');
+
+try {
+  const remoteokModule = await import(pathToFileURL(join(ROOT, 'providers/remoteok.mjs')).href);
+  const remoteok = remoteokModule.default;
+
+  if (remoteok.id === 'remoteok') pass('remoteok.id is "remoteok"');
+  else fail(`remoteok.id is ${JSON.stringify(remoteok.id)}`);
+
+  if (typeof remoteok.fetch === 'function') pass('remoteok exports a fetch() function');
+  else fail('remoteok.fetch should be a function');
+
+  // Deterministic sample payload — no network. RemoteOK's feed is a JSON array
+  // whose index 0 is a {last_updated, legal} metadata object (no position/url),
+  // which the position/url validity filter must drop. Two valid jobs plus one
+  // with a relative url that must also be dropped.
+  const sample = [
+    { last_updated: 1751500000, legal: 'API terms: link back to remoteok.com' }, // metadata row → dropped
+    {
+      position: '  Senior AI Engineer  ',            // leading/trailing space → trimmed
+      url: '  https://remoteok.com/remote-jobs/1001-acme-senior-ai-engineer  ',
+      company: '  Acme Corp  ',                      // surrounding space → trimmed
+      location: '  Remote, Europe  ',                // surrounding space → trimmed
+    },
+    {
+      position: 'Platform Engineer',
+      url: 'https://remoteok.com/remote-jobs/1002-beta-platform-engineer',
+      company: '',                                   // empty → falls back to entry.name
+      // location omitted → ''
+    },
+    {
+      position: 'Relative URL Role',                 // dropped: non-absolute url
+      url: '/remote-jobs/relative',
+      company: 'Rel Co',
+    },
+  ];
+
+  let capturedUrl = null;
+  let capturedOpts = null;
+  const fetched = await remoteok.fetch(
+    { name: 'RemoteOK Board', provider: 'remoteok' },
+    { fetchJson: async (url, opts) => { capturedUrl = url; capturedOpts = opts; return sample; } },
+  );
+
+  if (capturedUrl === 'https://remoteok.com/api')
+    pass('remoteok.fetch() requests the board-wide feed URL');
+  else fail(`remoteok.fetch() requested ${JSON.stringify(capturedUrl)}`);
+
+  if (capturedOpts && capturedOpts.redirect === 'error')
+    pass('remoteok.fetch() passes redirect:"error" to fetchJson (SSRF guard)');
+  else fail(`remoteok.fetch() should pass redirect:"error", got: ${JSON.stringify(capturedOpts)}`);
+
+  if (fetched.length === 2)
+    pass('remoteok.fetch() keeps 2 valid jobs (drops metadata row + non-absolute-url row)');
+  else fail(`remoteok.fetch() returned ${fetched.length} jobs (expected 2)`);
+
+  // Normalized shape: exactly { title, url, company, location }.
+  if (fetched[0] && Object.keys(fetched[0]).sort().join(',') === 'company,location,title,url')
+    pass('remoteok.fetch() returns the normalized { title, url, company, location } shape');
+  else fail(`remoteok.fetch() row 0 keys = ${JSON.stringify(fetched[0] && Object.keys(fetched[0]))}`);
+
+  if (fetched[0]?.title === 'Senior AI Engineer'
+      && fetched[0]?.url === 'https://remoteok.com/remote-jobs/1001-acme-senior-ai-engineer'
+      && fetched[0]?.company === 'Acme Corp'
+      && fetched[0]?.location === 'Remote, Europe')
+    pass('remoteok.fetch() maps position→title and trims url/company/location into the normalized shape');
+  else fail(`remoteok.fetch() row 0 = ${JSON.stringify(fetched[0])}`);
+
+  if (fetched[1]?.company === 'RemoteOK Board')
+    pass('remoteok.fetch() falls back to entry.name when company is empty');
+  else fail(`remoteok.fetch() row 1 company = ${JSON.stringify(fetched[1]?.company)}`);
+
+  if (fetched[1]?.location === '')
+    pass('remoteok.fetch() yields empty location when location is absent');
+  else fail(`remoteok.fetch() row 1 location = ${JSON.stringify(fetched[1]?.location)}`);
+
+  // company default when both company and entry.name are missing → 'RemoteOK'.
+  const noName = await remoteok.fetch(
+    {},
+    { fetchJson: async () => ([{ position: 'Role', url: 'https://remoteok.com/remote-jobs/1003-x' }]) },
+  );
+  if (noName[0]?.company === 'RemoteOK')
+    pass('remoteok.fetch() defaults company to "RemoteOK" when company and entry.name are both missing');
+  else fail(`remoteok.fetch() default company = ${JSON.stringify(noName[0]?.company)}`);
+
+  // Empty-feed safety: an empty array yields an empty result (no crash).
+  const empty = await remoteok.fetch({ name: 'X' }, { fetchJson: async () => ([]) });
+  if (Array.isArray(empty) && empty.length === 0) pass('remoteok.fetch() returns [] for an empty feed');
+  else fail(`remoteok.fetch() empty feed = ${JSON.stringify(empty)}`);
+
+  // Malformed (non-array) response → throws.
+  let badResponseThrew = false;
+  try {
+    await remoteok.fetch(
+      { name: 'X', provider: 'remoteok' },
+      { fetchJson: async () => ({ jobs: [] }) },
+    );
+  } catch (e) {
+    badResponseThrew = /unexpected API response/.test(e.message);
+  }
+  if (badResponseThrew) pass('remoteok.fetch() throws on a non-array API response');
+  else fail('remoteok.fetch() should throw when the response is not an array');
+
+} catch (e) {
+  fail(`remoteok provider tests crashed: ${e.message}`);
 }
 
 // ── 49. Provider — 4dayweek ─────────────────────────────────────

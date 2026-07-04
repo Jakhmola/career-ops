@@ -5,7 +5,8 @@
 //
 // Algorithm:
 //   1. Find the current monthly hiring thread via the Algolia HN search API
-//      (search_by_date, tags=story, query="Ask HN Who is hiring").
+//      (search_by_date, tags=story,author_whoishiring — the official bot account,
+//      so copycat/troll threads by other authors never match).
 //   2. Fetch the thread's item from the Algolia items API; top-level `children`
 //      are individual job posts left as top-level comments.
 //   3. Parse each comment: the first non-empty line is treated as the title/header
@@ -17,7 +18,7 @@
 // Wire in via a `job_boards:` entry with `provider: hackernews`.
 
 const SEARCH_URL =
-  'https://hn.algolia.com/api/v1/search_by_date?tags=story&query=Ask%20HN%20Who%20is%20hiring&hitsPerPage=5';
+  'https://hn.algolia.com/api/v1/search_by_date?tags=story,author_whoishiring&query=Ask%20HN%20Who%20is%20hiring&hitsPerPage=5';
 
 /** @param {string} id */
 function itemUrl(id) {
