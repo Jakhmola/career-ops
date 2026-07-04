@@ -1,6 +1,8 @@
 // @ts-check
 /** @typedef {import('./_types.js').Provider} Provider */
 
+import { htmlToText } from './_jd.mjs';
+
 // Playwright scraper — config-driven browser-based scraper for job boards that
 // have no public API. Boards: IamExpat (NL expat), werk.nl (UWV government).
 //
@@ -17,7 +19,11 @@
 //     in the keyword search input, then intercepts the POST response from
 //     /kia/publiek/zoekenvacatures/api/search. Pagination via currentPage param.
 //     XSRF token read from the non-HttpOnly XSRF-TOKEN cookie and forwarded as
-//     X-XSRF-TOKEN header on subsequent page.evaluate() fetch calls.
+//     X-XSRF-TOKEN header on subsequent page.evaluate() fetch calls. List rows
+//     carry no JD; kept rows get a fetchJd() closure that cookie-replays the
+//     detail endpoint (api/vacature/{ref}) from plain node fetch — verified
+//     2026-07-04 to work after browser close (the session cookies are what
+//     keep OAM SSO from 302-walling the request; XSRF not required on GET).
 //
 // Dormant pattern: if Playwright/chromium is unavailable (ENOENT / import
 // failure), log a one-line skip and return [] — never throw for mere absence,
@@ -35,6 +41,11 @@
 // board fails gracefully (per-board try/catch) and returns nothing.
 //
 // NO detect() — scrapers must never be auto-matched to a tracked_companies entry.
+
+// Shared UA — browser context and the werk.nl fetchJd cookie-replay must present
+// the same client identity as the session the cookies were minted for.
+const UA =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
 // ── Handler registry ────────────────────────────────────────────────────────
 
@@ -93,10 +104,7 @@ export default {
       browser = await chromium.launch(
         chromiumLaunchOptions(chromium, { headless: true, ...(proxy ? { proxy } : {}) }),
       );
-      const context = await browser.newContext({
-        userAgent:
-          'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      });
+      const context = await browser.newContext({ userAgent: UA });
       const page = await context.newPage();
 
       for (const board of boards) {
@@ -354,7 +362,12 @@ export function extractIamExpatJobs(rscRaw, domLinks) {
  *   3. For each configured query, call the search API via page.evaluate fetch
  *      (shares the session + cookies). Paginate up to max_pages.
  *   4. Map each search item → NormalizedJob (no description in list results —
- *      description left empty; the detail endpoint would require N extra calls).
+ *      description left empty).
+ *   5. Attach a fetchJd() closure to every returned job: a plain node fetch of
+ *      the detail endpoint (api/vacature/{ref}) replaying the browser session's
+ *      cookies, so scan.mjs's kept-row JD hook can fill descriptions after the
+ *      browser is closed. Verified live 2026-07-04: cookie-replay returns the
+ *      same 200 JSON outside the browser; cookie-less requests 302 into OAM SSO.
  *
  * Public vacancy URL: https://www.werk.nl/nl/vacatures/{referenceNumber}
  *
@@ -365,6 +378,7 @@ export function extractIamExpatJobs(rscRaw, domLinks) {
 async function scrapeWerkNl(page, boardConfig) {
   const BASE = 'https://www.werk.nl';
   const SEARCH_API = '/werkzoekenden/mijn-werkmap/kia/publiek/zoekenvacatures/api/search';
+  const DETAIL_API = '/werkzoekenden/mijn-werkmap/kia/publiek/zoekenvacatures/api/vacature';
 
   const queries = Array.isArray(boardConfig.queries) && boardConfig.queries.length > 0
     ? boardConfig.queries
@@ -482,7 +496,37 @@ async function scrapeWerkNl(page, boardConfig) {
     }
   }
 
-  return jobs.slice(0, maxResults);
+  // ── Step 6: attach fetchJd closures (kept-row JD capture) ───────────────────
+  // The detail endpoint accepts the browser session's cookies replayed from a
+  // plain node fetch (verified 2026-07-04), so the closures keep working after
+  // the browser closes. The XSRF header isn't required on GET but is sent
+  // anyway (free, and survives a server-side tightening). Failure just throws —
+  // scan.mjs's kept-row hook catches and lets the row enter the pipeline JD-less.
+  const kept = jobs.slice(0, maxResults);
+  const cookieHeader = (await page.context().cookies())
+    .map((c) => `${c.name}=${c.value}`)
+    .join('; ');
+  for (const job of kept) {
+    const ref = job.url.match(/(\d+)$/)?.[1]; // public URL ends in the referenceNumber
+    if (!ref) continue;
+    job.fetchJd = async () => {
+      // scan.mjs awaits kept-row fetchJd calls sequentially, so this per-call
+      // jitter paces the detail endpoint globally (~500-800ms between calls).
+      await new Promise((r) => setTimeout(r, 500 + Math.random() * 300));
+      const resp = await fetch(`${BASE}${DETAIL_API}/${ref}`, {
+        headers: {
+          Cookie: cookieHeader,
+          'X-XSRF-TOKEN': decodeURIComponent(xsrfToken),
+          Accept: 'application/json',
+          'User-Agent': UA,
+        },
+      });
+      if (!resp.ok) throw new Error(`werk.nl detail ${ref}: HTTP ${resp.status}`);
+      return parseWerkNlDetail(await resp.json());
+    };
+  }
+
+  return kept;
 }
 
 // ── Pure extraction (exported for unit tests — no network/browser inside) ───
@@ -496,9 +540,9 @@ async function scrapeWerkNl(page, boardConfig) {
  *   organisation:    string  — employer name
  *   workLocationCity:string  — city in ALL-CAPS (we title-case it)
  *
- * No description is available in the list results; the detail endpoint
- * (/api/vacature/{ref}) has it but requires one extra HTTP call per job.
- * description is left empty — scan.mjs skips JD persistence when empty.
+ * No description is available in the list results — it is left empty, which is
+ * exactly what makes scan.mjs's kept-row hook call the fetchJd() closure that
+ * scrapeWerkNl attaches (detail endpoint, one paced call per KEPT row only).
  *
  * Public URL: https://www.werk.nl/nl/vacatures/{referenceNumber}
  *
@@ -531,6 +575,27 @@ export function parseWerkNlResponse(json) {
     out.push({ title, url, company, location, description: '' });
   }
   return out;
+}
+
+/**
+ * Extract JD text from a werk.nl detail API response
+ * (GET /…/zoekenvacatures/api/vacature/{referenceNumber}).
+ *
+ * Shape observed live (2026-07-04, stable across postings): the JD lives in
+ * `proposition.function.description` — plain text with \n breaks, server-side
+ * truncated at ~2000 chars ("…"), which is plenty for triage's language
+ * detection. A top-level `description` field exists but was null on every
+ * sampled (aggregated) posting; preferred when present. Both run through
+ * htmlToText — a no-op on plain text, a guard if HTML ever shows up.
+ *
+ * @param {unknown} json - parsed JSON from the detail API (or any unknown value)
+ * @returns {string}
+ */
+export function parseWerkNlDetail(json) {
+  if (!json || typeof json !== 'object') return '';
+  const j = /** @type {any} */ (json);
+  const text = j.description || j.proposition?.function?.description || '';
+  return htmlToText(String(text));
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
