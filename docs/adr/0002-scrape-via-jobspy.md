@@ -57,6 +57,12 @@ scrape time so downstream evaluation never re-fetches a login-walled page.
   URL rather than the login-walled LinkedIn page (avoiding false "expired"
   negatives). This costs one extra LinkedIn request per job, paid for by the low
   `results_wanted` cap.
+- **Kept-row JD fetch (later addition).** Scraper providers whose list rows lack
+  a JD can expose a per-job `fetchJd()`; `scan.mjs` calls it only for rows that
+  survive title/location/dedup filters, capped per provider (`max_jd_fetches`
+  config key, default 60). This gets JD text in front of pre-triage (language
+  penalty) at scan time without paying a detail request for filtered-out noise.
+  Rows past the cap enter the pipeline JD-less, as before.
 - **JSearch retired.** Scraped Google Jobs replaces JSearch's Google-for-Jobs
   index without an API key or monthly cap. `providers/jsearch.mjs` and
   `usage-ledger.mjs` become redundant and are slated for removal.

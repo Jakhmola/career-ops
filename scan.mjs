@@ -619,9 +619,14 @@ export function canonicalizeUrl(raw) {
   u.protocol = 'https:';
   u.hostname = u.hostname.toLowerCase().replace(/^www\./, '');
   u.hash = '';
-  // LinkedIn job pages: the numeric id IS the identity.
-  const li = u.hostname === 'linkedin.com' && u.pathname.match(/^\/jobs\/view\/(\d+)/);
-  if (li) return `https://linkedin.com/jobs/view/${li[1]}`;
+  // LinkedIn job pages: the numeric id IS the identity. Locale subdomains
+  // (nl.linkedin.com), slugged paths (/jobs/view/ai-engineer-at-acme-123) and
+  // search-page ?currentJobId= links all name the same posting.
+  if (u.hostname === 'linkedin.com' || u.hostname.endsWith('.linkedin.com')) {
+    const id = u.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?(\d+)/)?.[1]
+      || (u.searchParams.get('currentJobId') || '').match(/^(\d+)$/)?.[1];
+    if (id) return `https://linkedin.com/jobs/view/${id}`;
+  }
   for (const key of [...u.searchParams.keys()]) {
     if (TRACKING_PARAM_PREFIX_RE.test(key) || TRACKING_PARAMS.has(key.toLowerCase())) {
       u.searchParams.delete(key);
@@ -1405,6 +1410,10 @@ async function main() {
       continue;
     }
     scrapersPolled++;
+    // Kept-row JD budget: providers whose list rows lack a JD may expose a
+    // per-job fetchJd() for on-demand detail fetch. Cap fetches per provider
+    // so a heavy first run can't stretch the concurrency-1 scraper phase.
+    let jdFetchesLeft = Number.isFinite(+scrConfig.max_jd_fetches) ? +scrConfig.max_jd_fetches : 60;
     const descriptor = {
       name: scrId,
       dryRun,
@@ -1443,9 +1452,22 @@ async function main() {
           seenUrls.add(canonUrl);
           seenCompanyRoles.add(key);
           statFor(scrSource).kept++;
+          // Kept-row JD fetch: only rows that survived filters/dedup earn a
+          // detail fetch, so triage-score sees JD text at scan time (Dutch
+          // penalty etc.) instead of retroactively. Failure is fine — the row
+          // enters the pipeline JD-less, exactly as before. Known waste: with
+          // --verify, liveness runs after this loop, so verify-dropped offers
+          // may burn a few fetches and leave orphan jds/*.md. Accepted.
+          if (!job.description && typeof job.fetchJd === 'function' && !dryRun && jdFetchesLeft > 0) {
+            jdFetchesLeft--;
+            try { job.description = await job.fetchJd(); } catch { /* JD-less row */ }
+          }
           // `board` (job.site, e.g. linkedin/indeed) rides along so the summary
-          // can break a scraper's contribution down per board.
-          const offer = { title: job.title, url: job.url, company: job.company, location: job.location, source: scrId, board: job.site };
+          // can break a scraper's contribution down per board. `description`
+          // feeds triage-score's language penalty (offer.jdText || offer.description).
+          // `source` carries the granular per-board label (jobspy:linkedin, not
+          // jobspy) so scan-history rows say WHICH board a row came from.
+          const offer = { title: job.title, url: job.url, company: job.company, location: job.location, source: scrSource, board: job.site, description: job.description };
           persistJd(offer, job, scrId);
           newOffers.push(offer);
         }

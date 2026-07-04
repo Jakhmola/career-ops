@@ -37,7 +37,11 @@
 ## Evaluation Flow (Single Offer)
 
 1. **Input**: User pastes JD text or URL
-2. **Extract**: Playwright/WebFetch extracts JD from URL
+2. **Extract**: Playwright/WebFetch extracts JD from URL. Scan-sourced offers
+   often skip this: `scan.mjs` persists JDs captured at scrape time to
+   `jds/{slug}.md` (referenced as `local:jds/...`), and for kept rows whose
+   provider exposes an on-demand `fetchJd()` it fetches the JD at scan time
+   (budgeted per provider via `max_jd_fetches`, default 60)
 3. **Classify**: Detect archetype (1 of 6 types)
 4. **Evaluate**: 6 blocks (A-F):
    - A: Role summary

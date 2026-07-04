@@ -7,6 +7,11 @@
 // `local:jds/...` so downstream evaluation reads the JD offline instead of
 // re-fetching a login-walled page. Keeping the write here (not in the provider)
 // means filtered-out roles never leave orphan files behind.
+//
+// Providers whose list rows lack a JD may instead attach a per-job `fetchJd()`
+// (async, returns the JD text); scan.mjs calls it for KEPT rows only, capped
+// per provider via the `max_jd_fetches` config key (default 60), so triage
+// sees JD text at scan time without a detail request per filtered-out row.
 
 import { createHash } from 'node:crypto';
 
