@@ -48,6 +48,8 @@ def parse_args(argv):
                    help="Country for Indeed/Glassdoor, e.g. 'Netherlands'.")
     p.add_argument("--hours-old", type=int, default=0,
                    help="Only postings newer than N hours (0 = no limit).")
+    p.add_argument("--is-remote", action="store_true",
+                   help="Filter to remote postings (jobspy is_remote).")
     p.add_argument("--linkedin-fetch-description", action="store_true",
                    help="Pull the full JD while on the LinkedIn page (1 extra request/job).")
     return p.parse_args(argv)
@@ -76,8 +78,12 @@ def main(argv):
         kwargs["hours_old"] = args.hours_old
     if site == "google" and google_term:
         kwargs["google_search_term"] = google_term
-    if site == "indeed" and args.country_indeed:
+    # Glassdoor shares Indeed's country table in python-jobspy; without this it
+    # silently defaults to country_indeed="usa" (glassdoor.com, not the NL domain).
+    if site in ("indeed", "glassdoor") and args.country_indeed:
         kwargs["country_indeed"] = args.country_indeed
+    if args.is_remote:
+        kwargs["is_remote"] = True
     if site == "linkedin" and args.linkedin_fetch_description:
         kwargs["linkedin_fetch_description"] = True
 

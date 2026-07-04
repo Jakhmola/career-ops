@@ -109,7 +109,10 @@ export default {
         if (location) argv.push('--location', location);
         if (hoursOld > 0) argv.push('--hours-old', String(hoursOld));
         if (site.name === 'google') argv.push('--google-search-term', group);
-        if (site.name === 'indeed' && countryIndeed) argv.push('--country-indeed', countryIndeed);
+        // Glassdoor reuses Indeed's country flag (python-jobspy shares the country
+        // table); without it glassdoor silently defaults to usa → glassdoor.com.
+        if ((site.name === 'indeed' || site.name === 'glassdoor') && countryIndeed) argv.push('--country-indeed', countryIndeed);
+        if (site.is_remote) argv.push('--is-remote');
         if (site.name === 'linkedin' && fetchDescription) argv.push('--linkedin-fetch-description');
 
         ctx.recordCall?.('jobspy');
@@ -157,7 +160,7 @@ export default {
     // failure is visible in the scan log instead of dissolving into the totals.
     for (const site of sites) {
       if (siteOk.get(site.name) && (siteRecords.get(site.name) || 0) === 0) {
-        const hint = site.name === 'indeed' && countryIndeed
+        const hint = (site.name === 'indeed' || site.name === 'glassdoor') && countryIndeed
           ? ` — check country_indeed="${countryIndeed}" (jobspy returns [] for an unrecognized country)`
           : '';
         console.warn(`⚠️  jobspy ${site.name}: 0 results despite a successful scrape${hint}`);
@@ -190,13 +193,16 @@ export function normalizeTerms(value) {
  * Tolerates a bare list of strings (["linkedin","indeed"]) or objects, and
  * falls back to the three default boards when absent. Unknown site names are
  * dropped. An optional per-site `search_terms` array is carried through so a
- * board can override the shared default list.
+ * board can override the shared default list, and an optional `is_remote: true`
+ * flag is carried through (adds jobspy's is_remote filter for that pass). A
+ * site may appear twice when one entry is the is_remote pass (e.g. plain
+ * indeed + remote indeed); exact duplicates are still dropped.
  *
  * @param {unknown} value
- * @returns {{name: string, results_wanted: number, search_terms?: string[]}[]}
+ * @returns {{name: string, results_wanted: number, search_terms?: string[], is_remote?: boolean}[]}
  */
 export function normalizeSites(value) {
-  const VALID = new Set(['linkedin', 'indeed', 'google']);
+  const VALID = new Set(['linkedin', 'indeed', 'google', 'glassdoor']);
   const defaults = new Map(DEFAULT_SITES.map((s) => [s.name, s.results_wanted]));
   if (!Array.isArray(value) || value.length === 0) return DEFAULT_SITES.map((s) => ({ ...s }));
   const out = [];
@@ -205,19 +211,23 @@ export function normalizeSites(value) {
     let name;
     let wanted;
     let perSiteTerms = [];
+    let isRemote = false;
     if (typeof item === 'string') {
       name = item.trim().toLowerCase();
     } else if (item && typeof item === 'object') {
       name = String(item.name || '').trim().toLowerCase();
       wanted = Number(item.results_wanted);
       perSiteTerms = normalizeTerms(item.search_terms);
+      isRemote = item.is_remote === true;
     }
-    if (!name || !VALID.has(name) || seen.has(name)) continue;
-    seen.add(name);
+    const key = isRemote ? `${name}+remote` : name;
+    if (!name || !VALID.has(name) || seen.has(key)) continue;
+    seen.add(key);
     out.push({
       name,
       results_wanted: Number.isFinite(wanted) && wanted > 0 ? Math.trunc(wanted) : (defaults.get(name) || 50),
       ...(perSiteTerms.length ? { search_terms: perSiteTerms } : {}),
+      ...(isRemote ? { is_remote: true } : {}),
     });
   }
   return out.length > 0 ? out : DEFAULT_SITES.map((s) => ({ ...s }));
