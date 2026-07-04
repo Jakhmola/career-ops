@@ -6,9 +6,9 @@ System-layer template files used by career-ops scripts and modes. These files ar
 
 | File | Used By | Purpose |
 |------|---------|---------|
-| `cv-template.html` | `generate-pdf.mjs` | HTML/CSS template for ATS-optimized CV PDFs |
-| `resume-template.html` | `generate-pdf.mjs` (via `--template`) | Resume-branded variant of `cv-template.html`. Same layout and placeholder tokens; differs in: `<title>` reads "Resume" instead of "CV", omits Certifications section, targets 1–2 page US/industry format. See detailed section below. |
-| `cv-template.tex` | `generate-latex.mjs` | LaTeX/Overleaf template for ATS-optimized CV PDFs |
+| `cv-template.html` | `generate-pdf.mjs` | HTML/CSS template for ATS-optimized CV PDFs. The ONLY CV template (resume-template.html removed 2026-07-04, single-template policy). |
+| `cover-letter-local.html` | `generate-pdf.mjs` | HTML/CSS template for prose cover letters, styled to match `cv-template.html`. The ONLY cover-letter template. |
+| `cv-template.tex` | `generate-latex.mjs` | LaTeX/Overleaf template for CV export (only when the user explicitly asks for LaTeX/Overleaf) |
 | `portals.example.yml` | Onboarding | Example portal scanner configuration (copy to `portals.yml` to activate) |
 | `states.yml` | `verify-pipeline.mjs`, `normalize-statuses.mjs`, `merge-tracker.mjs` | Canonical application states and their aliases |
 
@@ -16,21 +16,9 @@ System-layer template files used by career-ops scripts and modes. These files ar
 
 The HTML template rendered by Playwright into PDF. Uses placeholder tokens (`{{NAME}}`, `{{SUMMARY_TEXT}}`, `{{EXPERIENCE}}`, etc.) that the PDF pipeline fills at generation time.
 
-**Design:** Space Grotesk headings + DM Sans body, single-column ATS-safe layout, self-hosted fonts from `fonts/`.
+**Design:** "latex-chips" scheme (2026-07-04, user-approved): centered header, navy #1a3a5c name and section rules, black body at 13px, light-navy competency chips, system fonts only (Liberation Sans stack) for clean ATS text extraction.
 
 **Customization:** Edit this file to change colors, spacing, or section order. The placeholder tokens are documented in `batch/batch-prompt.md` under "Template placeholders."
-
-### resume-template.html
-
-Resume-branded variant of `cv-template.html` for US/industry job applications. Key differences from the CV template:
-
-- **Title** reads "Resume" instead of "CV"
-- **No Certifications section** — resumes focus on recent, relevant experience
-- **Designed for 1–2 pages** — omits academic-style sections
-
-Otherwise uses the same placeholder tokens (`{{NAME}}`, `{{SUMMARY_TEXT}}`, etc.) and is fully compatible with the existing PDF pipeline.
-
-**Keep in sync:** When updating `cv-template.html`, apply matching changes to `resume-template.html` (preserving the differences noted above).
 
 ### cv-template.tex
 
